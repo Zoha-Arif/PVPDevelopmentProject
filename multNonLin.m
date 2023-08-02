@@ -11,6 +11,8 @@ colorProfiles = '/Users/land/Desktop/projectTrackProfiles/supportFiles/colorProf
 rsqTableAdj = '/Users/land/Desktop/projectTrackProfiles/supportFiles/rsqTableAdj.csv';
 rsqTableOrd = '/Users/land/Desktop/projectTrackProfiles/supportFiles/rsqTableOrd.csv';
 inflecTable = '/Users/land/Desktop/projectTrackProfiles/supportFiles/inflecTable.csv';
+aicTable = '/Users/land/Desktop/projectTrackProfiles/supportFiles/aicTable.csv';
+anovaBootTable = '/Users/land/Desktop/projectTrackProfiles/supportFiles/anovaBootTable.csv';
 
 %convert csv into a table.
 Tshort = readtable(Tshort); 
@@ -19,6 +21,13 @@ colorProfiles = readtable(colorProfiles);
 rsqTableAdj = readtable(rsqTableAdj);
 rsqTableOrd = readtable(rsqTableOrd);
 inflecTable = readtable(inflecTable);
+aicTable = readtable(aicTable); 
+anovaBootTable = readtable(anovaBootTable); 
+anovaBootTable.Hemisphere = categorical(anovaBootTable.Hemisphere);
+anovaBootTable.Tract = categorical(anovaBootTable.Tract);
+
+%For ANOVA table
+lastRow = 1; 
 
 %============== Generate Plots ==============
 
@@ -33,7 +42,10 @@ close all
 
 for t = 1:length(tractIDs)
 
-    figure(t)
+    f = figure(t);
+
+    %startingx, startingy, width height
+    f.Position = [1000 1000 800 700];
 
     hold on 
 
@@ -65,62 +77,256 @@ for t = 1:length(tractIDs)
 
     %generating the model
     mdl = fitlm(tbl, Q);
-
+    
     %get appropriate RGB color for tract by indexing into colorProfiles.csv
     idx = find(strcmp(colorProfiles.NameOfTrack, char(tractIDs(t))) == 1);
     markerColor = [colorProfiles.Red(idx)/255, colorProfiles.Green(idx)/255, colorProfiles.Blue(idx)/255];
 
     %plotting the model
-    plt = plotAdjustedResponse(mdl, 'Age', 'MarkerEdgeColor', markerColor, 'MarkerFaceColor', markerColor) 
+    h = plotAdjustedResponse(mdl, 'Age', 'MarkerFaceColor', markerColor); 
+    
+    % Get data for plotting the confidence intervals and add CI to plot.
+    j = array2table(cat(2, h(1).XData', h(1).YData')); j.Properties.VariableNames =  {'x', 'y'};
+    mdlci = fitlm(j, 'y~x^2');
 
-    %Question: how to get confidence interval(?)
-    legend('', 'Fit');
+    clear f; 
+
+    %======================================================================
+    %Outliers
+
+    outliers = [];
+    % Examine model residuals: boxplot of raw residuals.
+    figure(t + length(tractIDs)); k = figure('visible', 'off');
+    m = mdlci.Residuals.Raw;
+    e = eps(max(m(:)));
+    boxplot(m)
+    % ylabel('Raw Residuals')
+    % Suppress figure display.
+    set(gcf,'Visible','off');              
+    set(0,'DefaultFigureVisible','off');
+%​
+    % Get indices of the outliers.
+    h1 = flipud(findobj(gcf,'tag','Outliers')); % flip order of handles
+    for jj = 1 : length( h1 )
+        x =  get( h1(jj), 'XData' );
+        y =  get( h1(jj), 'YData' );
+        for ii = 1 : length( x )
+            if not( isnan( x(ii) ) )
+                ix = find( abs( m(:,jj)-y(ii) ) < e );
+                outliers = cat(1, outliers, ix);
+                %                 text( x(ii), y(ii), sprintf( '\\leftarrowY%02d', ix ) )
+            end
+        end
+    end
+%​
+    k = gcf; close(k);
+%​
+    % Examine robust weights: boxplot of robust weights.
+    figure(t + length(tractIDs) + 1); k = figure('visible', 'off');
+    m = mdlci.Robust;
+    e = eps(max(m(:)));
+    boxplot(m);
+    % ylabel('Robust Beta-Weights')
+    % Suppress figure display.
+    set(gcf, 'Visible', 'off');              
+    set(0, 'DefaultFigureVisible', 'off');
+%​
+    % Get indices of the outliers.
+    h1 = flipud(findobj(gcf,'tag','Outliers')); % flip order of handles
+    for jj = 1 : length( h1 )
+        x =  get( h1(jj), 'XData' );
+        y =  get( h1(jj), 'YData' );
+        for ii = 1 : length( x )
+            if not( isnan( x(ii) ) )
+                ix = find( abs( m(:,jj)-y(ii) ) < e );
+                outliers = cat(1, outliers, ix);
+                %                 text( x(ii), y(ii), sprintf( '\\leftarrowY%02d', ix ) )
+            end
+        end
+    end
+%​
+    outliers = sort(outliers);
+%​
+    k = gcf; close(k);
+%​
+    k = figure('visible', 'on');
+    set(gcf, 'Visible', 'off');              
+    set(0, 'DefaultFigureVisible', 'off');
+%
+
+    %======================================================================
+
+    clf;
+
+    %Remove outliers
+    tbl(outliers, :) = []; 
+
+    %recalculate the model
+
+    %generating the model
+    mdl = fitlm(tbl, Q);
+
+    %plotting the model
+    h = plotAdjustedResponse(mdl, 'Age', 'MarkerEdgeColor', markerColor, 'MarkerFaceColor', markerColor);  
+    pltLeg = legend('', '', '');
+    set(pltLeg,'visible','off')
+    z = get(gca, 'children'); 
+    set(0, 'DefaultFigureVisible', 'off');
+
+
+    %get data for plotting the confidence intervals and add CI to plot.
+    j = array2table(cat(2, h(1).XData', h(1).YData')); j.Properties.VariableNames =  {'x', 'y'};
+    mdlci = fitlm(j, 'y~x^2');
+
+    clf(figure(t));
+
+    f = figure(t);
+    %startingx, startingy, width height
+    f.Position = [1000 1000 800 700];
+
+    hold on 
+
+    pci = plot(mdlci);
+    set(pci, 'MarkerEdgeColor', 'white', 'MarkerFaceColor', markerColor, 'MarkerSize', 12, 'Marker', 'o')
+    x = tbl.Age; y = tbl.yVar; CI = (tbl.yVar)/2; 
+    
+    %fill in confidence interval
+    cbHandles = findobj(pci,'DisplayName','Confidence bounds');
+    cbHandles = findobj(pci,'LineStyle', cbHandles.LineStyle, 'Color', cbHandles.Color);
+
+    upperCBHandle = cbHandles(2,:);
+    lowerCBHandle = cbHandles(1,:);
+    
+    xData = upperCBHandle.XData; 
+    k = patch([xData xData(end:-1:1) xData(1)], [lowerCBHandle.YData upperCBHandle.YData(end:-1:1) lowerCBHandle.YData(1)], 'b');
+    set(k, 'EdgeColor', 'none', 'FaceColor', [markerColor(1)*0.55  markerColor(2)*0.55 markerColor(3)*0.55], 'FaceAlpha', '0.2')
+
+    %grab trendline and datapoints
+    dataHandle = findobj(h,'DisplayName','data');
+    fitHandle = findobj(h,'DisplayName','fit');
+    dataHandle2 = findobj(pci,'DisplayName','Data');
+    fitHandle2 = findobj(pci,'DisplayName','Fit');
+
+    %style the trendline
+    set(fitHandle2, 'Color', [markerColor(1) markerColor(2) markerColor(3)], 'LineWidth', 3)
+
+    %w = plot(mdl, 'Marker', 'o', 'MarkerFaceColor', markerColor, 'MarkerSize', 12);
+    pltLeg = legend('', '', '');
+    set(fitHandle2, 'Marker', 'none')
+    set(pltLeg,'visible','off')
+    set(fitHandle, 'Visible', 'off')
+    set(h, 'Visible', 'off')
+    plot(h(1).XData, h(1).YData, 'MarkerEdgeColor', 'white', 'MarkerFaceColor', markerColor, 'MarkerSize', 12, 'Marker', 'o', 'LineStyle', 'none')
 
     %adding title and color to the model
     plotTitle = {char(tractIDs(t))};
-    plotTitle = strjoin(['Multiple Linear Model for', plotTitle]);
+    plotTitle = strjoin(['Multiple Nonlinear Model for', plotTitle]);
     title(plotTitle);
     xlabel('Age (years)');
     ylabel(measure);
 
-    %set scale of y-axis
-    ylim([0.3 0.6])
+    %delete confidence bounds border 
+    delete(pci(3))
+    delete(pci(4))
+
+    %===========================================================================
+    % Set up plot and measure-specific details.
+    capsize = 0;
+    marker = 'o';
+    linewidth = 1.5;
+    linestyle = 'none';
+    markersize = 100;
+    xtickvalues = [1 2 3 4];
+    xlim_lo = min(xtickvalues)-0.5; xlim_hi = max(xtickvalues)+0.5;
+    fontname = 'Arial';
+    fontsize = 50;
+    fontangle = 'italic';
+    yticklength = 0;
+    xticklength = 0.02;
+
+    % xaxis
+    xax = get(gca, 'xaxis');
+    xax.TickDirection = 'out';
+    xax.TickLength = [xticklength xticklength];
+    set(gca, 'XLim', [3 22], 'XTick', [3 12.5 22]);
+    xax.FontName = fontname;
+    xax.FontSize = fontsize;
+
+    % yaxis
+    yax = get(gca,'yaxis');
+    yax.TickDirection = 'out';
+    yax.TickLength = [yticklength yticklength];
+    set(gca, 'YLim', [0.3 0.6], 'YTick', [0.3 0.45 0.6]);
+    yax.FontName = fontname;
+    yax.FontSize = fontsize;
+    yax.FontAngle = fontangle;
+
+    %change figure background to white
+    set(gcf, 'color', 'w')
+
+    %===========================================================================
 
     %add adjusted r squared to table.
-    rsqTableAdj.MultNonLin(t) = mdl.Rsquared.Adjusted;
-    rsqTableOrd.MultNonLin(t) = mdl.Rsquared.Ordinary;
+    rsqTableAdj.MultNonLin(t) = mdlci.Rsquared.Adjusted;
+    rsqTableOrd.MultNonLin(t) = mdlci.Rsquared.Ordinary;
+    aicTable.MultNonLin(t)= mdlci.ModelCriterion.AIC;
 
      %======= Calculating Inflection & Fastest Rate of Change =======
     %xtbl = table(Age, Sex);
     %y = predict(mdl, xtbl);
-    y = mdl.Fitted; 
-    x = tbl.Age; 
+    %y = mdl.Fitted; 
+
+    x = unique(mdlci.Variables.x); 
+    y = predict(mdlci, x);
+
+   %issue: interp1 wants unique x values, but you can't because the age is
+    %the same for some subjects. one solution would be to modify each x value so that they are v slightly different! 
+
+    %Protect again X being and Y being NAN
+    %nanx = isnan(x(:,1));
+    %sum(x(nanx));
+
     ydt = detrend(y,1);                                     % Detrend 'y' To Facilitate Analysis
-    framelen = 101;                                         % Choose Appropriate Value
     dydx = gradient(ydt) ./ gradient(x);                   % Calculate Numerical Derivative
 
     ratetbl = table(x, y);                                 %save unordered derivatives in ratetbl
     ratetbl.dydx = dydx; 
-    ratetbl.dydx = abs(ratetbl.dydx);                      %save absolute value of derivatives
+    ratetbl = ratetbl(~any(isinf(ratetbl.dydx), 2), :);
+    %ratetbl.dydx = abs(ratetbl.dydx);                      %save absolute value of derivatives
 
-    dydx = sort(dydx);                                      %sort derivatives 
+    ratetbl = unique(ratetbl, 'rows');
+ 
+    ratetbl = sortrows(ratetbl, 'dydx');                                      %sort derivatives 
+    [~, ind] = unique(ratetbl(:,1), 'first');
+    ratetbl = ratetbl(ind, :);
+
+    [~, ind] = unique(ratetbl(:,"dydx"), 'first');
+    ratetbl = ratetbl(ind, :);
+    dydx = ratetbl.dydx; 
 
     [maxdydx,idxmax] = max(dydx);                           % Interpolation Index Lower Limit
     [mindydx,idxmin] = min(dydx);                           % Interpolation Index Upper Limit
     idxrng = idxmin : idxmax;
-    inflptx = interp1(dydx(idxrng), x(idxrng), 0);           % Find Inflection Point X-Value
-    inflpty = interp1(x, y, inflptx);                        % Find Inflection Point Y-Value
+    inflptx = interp1(dydx(idxrng), ratetbl.x(idxrng), 0, 'linear');           % Find Inflection Point X-Value
+    inflpty = interp1(ratetbl.x, ratetbl.y, inflptx, 'linear');                        % Find Inflection Point Y-Value
     
-    plot(inflptx, inflpty, 's', 'MarkerEdgeColor', 'r', 'MarkerFaceColor', 'r', ...
-        'MarkerSize', 7, 'DisplayName','Inflection Point')
+    f(1) = plot(inflptx, inflpty, 's', 'MarkerEdgeColor', 'white', 'MarkerFaceColor', 'r', ...
+        'MarkerSize', 50, 'DisplayName','Inflection Point');
 
     %calculating fastest rate of change by finding maximum dy/dx in
     %magnitude
     [~, fastestRate] = max(ratetbl.dydx); 
     fr = ratetbl(fastestRate, :);
 
-    plot(fr.x(1), fr.y(1), 's', 'MarkerEdgeColor', 'g', 'MarkerFaceColor', 'g', ...
-        'MarkerSize', 7, 'DisplayName','Fastest Rate of Change')
+    f(2) = plot(fr.x(1), fr.y(1), '>', 'MarkerEdgeColor', 'white', 'MarkerFaceColor', 'r', ...
+        'MarkerSize', 50, 'DisplayName','Fastest Rate of Change');
+
+    %legend
+    %lgd = legend(f, {"Inflection Point","Fastest Rate of Change"});
+    %lgd.FontName = 'Arial';
+    %lgd.FontSize = 18;
+    %legend box off;
+    %pbaspect([1 1 1]);
 
     hold off
 
@@ -129,6 +335,62 @@ for t = 1:length(tractIDs)
     inflecTable.MultInflecY(t) = inflpty; 
     inflecTable.MultFastRateX(t) = fr.x(1); 
     inflecTable.MultNFastRateY(t) = fr.y(1); 
+
+    %============== Performing an ANOVA ==============
+
+    N = 100; 
+
+    for q = 1:10000
+        %Select random sample of N
+        x = unique(mdlci.Variables.x); 
+        y = predict(mdlci, x);
+        msize = size(x);
+        idx = randperm(msize(1), 50);
+        x = x(idx(1,:));
+        y = y(idx(1,:));
+
+        %Find the inflection points
+        %ydt = detrend(y,1);                                     % Detrend 'y' To Facilitate Analysis
+        dydx = gradient(y) ./ gradient(x);                   % Calculate Numerical Derivative
+
+        ratetbl = table(x, y);                                 %save unordered derivatives in ratetbl
+        ratetbl.dydx = dydx; 
+        ratetbl = ratetbl(~any(isinf(ratetbl.dydx), 2), :);
+
+        ratetbl = unique(ratetbl, 'rows');
+ 
+        ratetbl = sortrows(ratetbl, 'dydx');                                      %sort derivatives 
+        [~, ind] = unique(ratetbl(:,1), 'first');
+        ratetbl = ratetbl(ind, :);
+
+        [~, ind] = unique(ratetbl(:,"dydx"), 'first');
+        ratetbl = ratetbl(ind, :);
+        dydx = ratetbl.dydx; 
+
+        [maxdydx,idxmax] = max(dydx);                           % Interpolation Index Lower Limit
+        [mindydx,idxmin] = min(dydx);                           % Interpolation Index Upper Limit
+        idxrng = idxmin : idxmax;
+        inflptx = interp1(ratetbl.dydx(idxrng), ratetbl.x(idxrng), 0, 'nearest', 'extrap');           % Find Inflection Point X-Value
+        inflpty = interp1(ratetbl.x, ratetbl.y, inflptx, 'nearest', 'extrap');                % Find Inflection Point Y-Value
+
+        anovaBootTable.SampleNum(lastRow) = q; 
+        anovaBootTable.TractIDs(lastRow) = tractIDs(t); 
+        anovaBootTable.MultInflecX(lastRow) = inflptx; 
+        anovaBootTable.MultInflecY(lastRow) = inflpty; 
+        
+        if (string(extract(tractIDs(t), 1)) == 'l')
+            anovaBootTable.Hemisphere(lastRow) = 'left';
+            anovaBootTable.Tract(lastRow) = string(extractAfter(tractIDs(t), 4));
+        end
+
+        if (string(extract(tractIDs(t), 1)) == 'r')
+            anovaBootTable.Hemisphere(lastRow) = 'right';
+            anovaBootTable.Tract(lastRow) = string(extractAfter(tractIDs(t), 5));
+        end
+
+        lastRow = lastRow + 1; 
+
+    end
 
 end
 
@@ -139,8 +401,12 @@ mainpath = '/Users/land/Desktop/projectTrackProfiles/supportFiles';
 table_path_format_rsqTAdj = fullfile(mainpath, 'rsqTableAdj.csv');
 table_path_format_rsqTOrd = fullfile(mainpath, 'rsqTableOrd.csv');
 table_path_format_inflecT = fullfile(mainpath, 'inflecTable.csv');
+table_path_format_aicTable = fullfile(mainpath, 'aicTable.csv');
+table_path_format_anovaBootTable = fullfile(mainpath, 'anovaBootTable.csv');
 
 %funally, save tables
 writetable(rsqTableAdj, table_path_format_rsqTAdj);
 writetable(rsqTableOrd, table_path_format_rsqTOrd);
 writetable(inflecTable, table_path_format_inflecT);
+writetable(aicTable, table_path_format_aicTable);
+writetable(anovaBootTable, table_path_format_anovaBootTable);
