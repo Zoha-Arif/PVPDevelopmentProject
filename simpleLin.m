@@ -10,6 +10,7 @@ Tlong = '/Users/land/Desktop/projectTrackProfiles/supportFiles/Tlong.csv';
 colorProfiles = '/Users/land/Desktop/projectTrackProfiles/supportFiles/colorProfiles.csv';
 rsqTableAdj = '/Users/land/Desktop/projectTrackProfiles/supportFiles/rsqTableAdj.csv';
 rsqTableOrd = '/Users/land/Desktop/projectTrackProfiles/supportFiles/rsqTableOrd.csv';
+aicTable = '/Users/land/Desktop/projectTrackProfiles/supportFiles/aicTable.csv';
 
 %convert csv into a table.
 Tshort = readtable(Tshort); 
@@ -17,6 +18,7 @@ Tlong = readtable(Tlong);
 colorProfiles = readtable(colorProfiles);
 rsqTableAdj = readtable(rsqTableAdj);
 rsqTableOrd = readtable(rsqTableOrd);
+aicTable = readtable(aicTable); 
 
 %============== Generate Plots ==============
 
@@ -30,14 +32,18 @@ rsqSimpleLin = table(tractIDs);
 close all
 
 for t = 1:length(tractIDs)
-    figure(t)
+    
+    f = figure(t);
+
+    %startingx, startingy, width height
+    f.Position = [1000 1000 800 700];
     
     hold on 
     
     %plotting a nonlinear aggression model 
     Age = Tshort.Age; 
     yVar = Tshort.(char(tractIDs(t)));
-   
+
     tbl = table(Age, yVar); 
     tbl(any(ismissing(tbl), 2), :) = [];
 
@@ -59,14 +65,174 @@ for t = 1:length(tractIDs)
 
     %generating the model
     mdl = fitlm(tbl, Q);
-
+    
     %get appropriate RGB color for tract by indexing into colorProfiles.csv
     idx = find(strcmp(colorProfiles.NameOfTrack, char(tractIDs(t))) == 1);
     markerColor = [colorProfiles.Red(idx)/255, colorProfiles.Green(idx)/255, colorProfiles.Blue(idx)/255];
 
+    clear f; 
+
+    %======================================================================
+    %Outliers
+
+    outliers = [];
+    % Examine model residuals: boxplot of raw residuals.
+    figure(t + length(tractIDs)); k = figure('visible', 'off');
+    m = mdl.Residuals.Raw;
+    e = eps(max(m(:)));
+    boxplot(m)
+    % ylabel('Raw Residuals')
+    % Suppress figure display.
+    set(gcf,'Visible','off');              
+    set(0,'DefaultFigureVisible','off');
+%​
+    % Get indices of the outliers.
+    h1 = flipud(findobj(gcf,'tag','Outliers')); % flip order of handles
+    for jj = 1 : length( h1 )
+        x =  get( h1(jj), 'XData' );
+        y =  get( h1(jj), 'YData' );
+        for ii = 1 : length( x )
+            if not( isnan( x(ii) ) )
+                ix = find( abs( m(:,jj)-y(ii) ) < e );
+                outliers = cat(1, outliers, ix);
+                %                 text( x(ii), y(ii), sprintf( '\\leftarrowY%02d', ix ) )
+            end
+        end
+    end
+%​
+    k = gcf; close(k);
+%​
+    % Examine robust weights: boxplot of robust weights.
+    figure(t + length(tractIDs) + 1); k = figure('visible', 'off');
+    m = mdl.Robust;
+    e = eps(max(m(:)));
+    boxplot(m);
+    % ylabel('Robust Beta-Weights')
+    % Suppress figure display.
+    set(gcf, 'Visible', 'off');              
+    set(0, 'DefaultFigureVisible', 'off');
+%​
+    % Get indices of the outliers.
+    h1 = flipud(findobj(gcf,'tag','Outliers')); % flip order of handles
+    for jj = 1 : length( h1 )
+        x =  get( h1(jj), 'XData' );
+        y =  get( h1(jj), 'YData' );
+        for ii = 1 : length( x )
+            if not( isnan( x(ii) ) )
+                ix = find( abs( m(:,jj)-y(ii) ) < e );
+                outliers = cat(1, outliers, ix);
+                %                 text( x(ii), y(ii), sprintf( '\\leftarrowY%02d', ix ) )
+            end
+        end
+    end
+%​
+    outliers = sort(outliers);
+%​
+    k = gcf; close(k);
+%​
+    k = figure('visible', 'on');
+    set(gcf, 'Visible', 'off');              
+    set(0, 'DefaultFigureVisible', 'off');
+%
+
+    %======================================================================
+
+    clf;
+
+    %Remove outliers
+    tbl(outliers, :) = []; 
+
+    %recalculate the model
+
+    %generating the model
+    mdl = fitlm(tbl, Q);
+
     %plotting the model
-    plot(mdl, 'Marker', 'o', 'MarkerEdgeColor', markerColor, 'MarkerFaceColor', markerColor)
-    legend('', 'Fit', 'Confidence Intervals');
+    h = plotAdjustedResponse(mdl, 'Age', 'MarkerEdgeColor', markerColor, 'MarkerFaceColor', markerColor);  
+    pltLeg = legend('', '', '');
+    set(pltLeg,'visible','off')
+    z = get(gca, 'children'); 
+    set(0, 'DefaultFigureVisible', 'off');
+
+    clf(figure(t));
+
+    f = figure(t);
+    %startingx, startingy, width height
+    f.Position = [1000 1000 800 700];
+
+    hold on 
+
+    %plotting the model
+    h = plot(mdl, 'Marker', 'o', 'MarkerEdgeColor', 'white', 'MarkerFaceColor', markerColor, 'MarkerSize', 12);
+    pltLeg = legend('', '', '');
+    set(pltLeg,'visible','off')
+
+    %grab trendline and datapoints
+    dataHandle = findobj(h,'DisplayName','Data');
+    fitHandle = findobj(h,'DisplayName','Fit');
+
+    %fill in confidence interval
+    cbHandles = findobj(h,'DisplayName','Confidence bounds');
+    cbHandles = findobj(h,'LineStyle',cbHandles.LineStyle, 'Color', cbHandles.Color);
+
+    upperCBHandle = cbHandles(2,:);
+    lowerCBHandle = cbHandles(1,:);
+    
+    xData = upperCBHandle.XData; 
+    k = patch([xData xData(end:-1:1) xData(1)], [lowerCBHandle.YData upperCBHandle.YData(end:-1:1) lowerCBHandle.YData(1)], 'b');
+    set(k, 'EdgeColor', 'none', 'FaceColor', [markerColor(1)*0.55  markerColor(2)*0.55 markerColor(3)*0.55], 'FaceAlpha', '0.2')
+
+    %style the trendline
+    set(fitHandle, 'Color', [markerColor(1) markerColor(2) markerColor(3)], 'LineWidth', 3)
+
+    w = plot(mdl, 'Marker', 'o', 'MarkerEdgeColor', 'white', 'MarkerFaceColor', markerColor, 'MarkerSize', 12);
+    pltLeg = legend('', '', '');
+    set(pltLeg,'visible','off')
+    fitHandle2 = findobj(w,'DisplayName','Fit');
+    set(fitHandle2, 'Visible', 'off')
+
+    %delete confidence bounds border 
+    delete(h(3))
+    delete(h(4))
+    delete(w(3))
+    delete(w(4))
+
+    %===========================================================================
+    % Set up plot and measure-specific details.
+    capsize = 0;
+    marker = 'o';
+    linewidth = 1.5;
+    linestyle = 'none';
+    markersize = 100;
+    xtickvalues = [1 2 3 4];
+    xlim_lo = min(xtickvalues)-0.5; xlim_hi = max(xtickvalues)+0.5;
+    fontname = 'Arial';
+    fontsize = 50;
+    fontangle = 'italic';
+    yticklength = 0;
+    xticklength = 0.02;
+
+    % xaxis
+    xax = get(gca, 'xaxis');
+    xax.TickDirection = 'out';
+    xax.TickLength = [xticklength xticklength];
+    set(gca, 'XLim', [3 22], 'XTick', [3 12.5 22]);
+    xax.FontName = fontname;
+    xax.FontSize = fontsize;
+
+    % yaxis
+    yax = get(gca,'yaxis');
+    yax.TickDirection = 'out';
+    yax.TickLength = [yticklength yticklength];
+    set(gca, 'YLim', [0.3 0.6], 'YTick', [0.3 0.45 0.6]);
+    yax.FontName = fontname;
+    yax.FontSize = fontsize;
+    yax.FontAngle = fontangle;
+
+    %change figure background to white
+    set(gcf, 'color', 'w')
+
+    %===========================================================================
 
     hold off
 
@@ -83,6 +249,7 @@ for t = 1:length(tractIDs)
     %add adjusted r squared to table.
     rsqTableAdj.SimpleLin(t) = mdl.Rsquared.Adjusted;
     rsqTableOrd.SimpleLin(t) = mdl.Rsquared.Ordinary;
+    aicTable.SimpleLin(t)= mdl.ModelCriterion.AIC;
 end
 
 %============== Export rsqTable as a csv ==============
@@ -91,7 +258,9 @@ mainpath = '/Users/land/Desktop/projectTrackProfiles/supportFiles';
 
 table_path_format_rsqTAdj = fullfile(mainpath, 'rsqTableAdj.csv');
 table_path_format_rsqTOrd = fullfile(mainpath, 'rsqTableOrd.csv');
+table_path_format_aicTable = fullfile(mainpath, 'aicTable.csv');
 
 %funally, save tables
 writetable(rsqTableAdj, table_path_format_rsqTAdj);
 writetable(rsqTableOrd, table_path_format_rsqTOrd);
+writetable(aicTable, table_path_format_aicTable);
