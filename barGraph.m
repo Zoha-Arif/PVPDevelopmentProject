@@ -43,7 +43,7 @@ f.Position = [1000 1000 600 500];
 
 %change figure background to white
 set(gcf, 'color', 'w')
-set(gca, 'YLim', [0 15], 'YTick', [0 7.5 15]);
+set(gca, 'YLim', [5 15], 'YTick', [5 10 15]);
 
 hold on
 
@@ -79,134 +79,58 @@ set(gca, 'FontSize', 24, 'FontName', 'Arial', 'LineWidth', 2);
 yax = get(gca,'yaxis');
 yax.FontAngle = 'italic';
 
-%==========================================================================
-%ANOVA
+%errorbar(x,y,ci,marker) where ci is the height of the line. This can be
+%computed from your confidence intervals. 
+%lower bound
+%pArcL = (-1 * inflecTable.MultInflecX(rowsL(1))) + 6.893721466;
+%pArcR = (-1 * inflecTable.MultInflecX(rowsR(1))) + 6.161891567;
+%splL = (-1 * inflecTable.MultInflecX(rowsL(2))) + 6.02040946;
+%splR = (-1 * inflecTable.MultInflecX(rowsR(2))) + 6.140460497;
+%angL = (-1 * inflecTable.MultInflecX(rowsL(3))) + 6.138552923;
+%angR = (-1 * inflecTable.MultInflecX(rowsR(3))) + 6.166994631;
+%tpcL = (-1 * inflecTable.MultInflecX(rowsL(4))) + 6.156368105;
+%tpcR = (-1 * inflecTable.MultInflecX(rowsR(4))) + 6.280257157;
 
-idxRpArc = find(strcmp(anovaBootTable.TractIDs, char('rightpArc')) == 1);
-idxLpArc = find(strcmp(anovaBootTable.TractIDs, char('leftpArc')) == 1);
+%neg = [pArcL pArcR splL splR angL angR tpcL tpcR];
 
-idxLMDLFang = find(strcmp(anovaBootTable.TractIDs, char('leftMDLFang')) == 1);
-idxRMDLFang = find(strcmp(anovaBootTable.TractIDs, char('rightMDLFang')) == 1);
+%upper bound
+%pArcL2 = 17.42338265 - (inflecTable.MultInflecX(rowsL(1)));
+%pArcR2 = 18.64703393 - (inflecTable.MultInflecX(rowsR(1)));
+%splL2 = 19.15793856 - (inflecTable.MultInflecX(rowsL(2)));
+%splR2 = 18.85889364 - (inflecTable.MultInflecX(rowsR(2)));
+%angL2 = 18.20414596 - (inflecTable.MultInflecX(rowsL(3)));
+%angR2 = 18.88247928 - (inflecTable.MultInflecX(rowsR(3)));
+%tpcL2 = 18.89348668 - (inflecTable.MultInflecX(rowsL(4)));
+%tpcR2 = 18.40364571 - (inflecTable.MultInflecX(rowsR(4)));
 
-idxLMDLFspl = find(strcmp(anovaBootTable.TractIDs, char('leftMDLFspl')) == 1);
-idxRMDLFspl = find(strcmp(anovaBootTable.TractIDs, char('rightMDLFspl')) == 1);
+%pos = [pArcL2 pArcR2 splL2 splR2 angL2 angR2 tpcL2 tpcR2];
 
-idxLTPC = find(strcmp(anovaBootTable.TractIDs, char('leftTPC')) == 1);
-idxRTPC = find(strcmp(anovaBootTable.TractIDs, char('rightTPC')) == 1);
+%lower bound
+pArcL = 0.288056093;
+pArcR = 0.35568899;
+splL = 0.384462403;
+splR = 0.36780094;
+angL = 0.334102559;
+angR = 0.36806937;
+tpcL = 0.367812558;
+tpcR = 0.341291798;
 
-anovaTable = vertcat(anovaBootTable(idxRpArc, :), anovaBootTable(idxLpArc, :), anovaBootTable(idxLMDLFang, :), ...
-    anovaBootTable(idxRMDLFang, :), anovaBootTable(idxLMDLFspl, :), anovaBootTable(idxRMDLFspl, :), ...
-    anovaBootTable(idxLTPC, :), anovaBootTable(idxRTPC, :));
-anovaTable2 = anovaTable(:, {'MultInflecX', 'Hemisphere', 'Tract'});
+neg = [pArcL pArcR splL splR angL angR tpcL tpcR];
 
-anovaTable2.Hemisphere = categorical(anovaTable2.Hemisphere); 
-anovaTable2.Hemisphere(anovaTable2.Hemisphere == 'right') = "0";
-anovaTable2.Hemisphere(anovaTable2.Hemisphere == 'left') = "1";
-anovaTable2.Hemisphere = str2num(char(anovaTable2.Hemisphere));
+%upper bound
+pArcL2 = 0.288056093;
+pArcR2 = 0.35568899;
+splL2 = 0.384462403;
+splR2 = 0.36780094;
+angL2 = 0.334102559;
+angR2 = 0.36806937;
+tpcL2 = 0.367812558;
+tpcR2 = 0.341291798;
 
-anovaTable2.Tract = categorical(anovaTable2.Tract); 
-anovaTable2.Tract(anovaTable2.Tract == 'pArc') = "1";
-anovaTable2.Tract(anovaTable2.Tract == 'MDLFang') = "2";
-anovaTable2.Tract(anovaTable2.Tract == 'MDLFspl') = "3";
-anovaTable2.Tract(anovaTable2.Tract == 'TPC') = "4";
-anovaTable2.Tract = str2num(char(anovaTable2.Tract));
-
-%anovaMatrix = anovaTable2{:,:}; 
-%table array
-Meas = table([1 2]', 'VariableNames', {'Categories'});
-rm = fitrm(anovaTable2, 'Hemisphere*Tract ~MultInflecX', 'WithinDesign', Meas); 
-ranovatbl = ranova(rm); 
-
-aov = anova(anovaTable2, 'MultInflecX');
-c = groupmeans(aov, ["Hemisphere", "Tract"]);
-
-%errlow = [c.MeanLower(1, :) c.MeanLower(2, :) c.MeanLower(5, :) c.MeanLower(6, :) ...
-%    c.MeanLower(3, :) c.MeanLower(4, :) c.MeanLower(7, :) c.MeanLower(8, :)];
-%errhigh = [c.MeanUpper(1, :) c.MeanUpper(2, :) c.MeanUpper(5, :) c.MeanUpper(6, :) ...
-%    c.MeanUpper(3, :) c.MeanUpper(4, :) c.MeanUpper(7, :) c.MeanUpper(8, :)];
-
-%errlow = [c.SE(1, :) c.SE(2, :) c.SE(3, :) c.SE(4, :) c.SE(5, :) c.SE(6, :) c.SE(7, :) c.SE(8, :)];    
-%errhigh = [c.SE(1, :) c.SE(2, :) c.SE(3, :) c.SE(4, :) c.SE(5, :) c.SE(6, :) c.SE(7, :) c.SE(8, :)]; 
-
-%er = errorbar(x1, y1, errlow, errhigh);
-%er.Color = [0 0 0];
-
-hold off
+pos = [pArcL2 pArcR2 splL2 splR2 angL2 angR2 tpcL2 tpcR2];
 
 
-%Other things: 
-%1. Need to perform ANOVA
-%2. Need to find results form ANOVA
-%3. Need to plot onto final results.
-
-%{
-%==========================================================================
-%Plot Left Hemisphere Fastest Rate of Change
-f = figure(3);
-%startingx, startingy, width height
-f.Position = [1000 1000 600 500];
-
-%change figure background to white
-set(gcf, 'color', 'w')
-set(gca, 'YLim', [0 5], 'YTick', [0 2.5 5]);
-
-hold on
-
-%generate bar graph
-x = categorical({'pArc', 'MDLF-spl', 'MDLF-ang', 'TPC'});
-[rows4, ~] = find(inflecTable.tractIDs == ["leftpArc", "leftMDLFspl", "leftMDLFang", "leftTPC"]);
-y = [inflecTable.MultFastRateX(rowsL(1)), inflecTable.MultFastRateX(rowsL(2)), inflecTable.MultFastRateX(rowsL(3)), inflecTable.MultFastRateX(rowsL(4))];
-
-b = bar(x, y, 'facecolor', 'flat', 'LineWidth', 2);
-
-clr = [MDLFangColor(1)/255 MDLFangColor(2)/255 MDLFangColor(3)/255; 
-        MDLFsplColor(1)/255 MDLFsplColor(2)/255 MDLFsplColor(3)/255;
-        TPCColor(1)/255 TPCColor(2)/255 TPCColor(3)/255;
-        pArcColor(1)/255 pArcColor(2)/255 pArcColor(3)/255];
-b.CData = clr; 
-
-title('Left Hemisphere Fastest Rate of Change')
-xlabel('Tract')
-ylabel('Age')
-set(gca, 'FontSize', 24, 'FontName', 'Arial', 'LineWidth', 2);
-yax = get(gca,'yaxis');
-yax.FontAngle = 'italic';
+e = errorbar([1 2 3 4 5 6 7 8], y1, neg, pos, 'o');
+e.set("Color", 'black', 'LineWidth', 2, 'CapSize', 10); 
 
 hold off
-
-%==========================================================================
-%Plot Right Hemisphere Fastest Rate of Change
-f = figure(4);
-%startingx, startingy, width height
-f.Position = [1000 1000 600 500];
-
-%change figure background to white
-set(gcf, 'color', 'w')
-set(gca, 'YLim', [0 5], 'YTick', [0 2.5 5]);
-
-hold on
-
-%generate bar graphs
-x = categorical({'pArc', 'MDLF-spl', 'MDLF-ang', 'TPC'});
-[rows3, ~] = find(inflecTable.tractIDs == ["rightpArc", "rightMDLFspl", "rightMDLFang", "rightTPC"]);
-y = [inflecTable.MultFastRateX(rowsR(1)), inflecTable.MultFastRateX(rowsR(2)), inflecTable.MultFastRateX(rowsR(3)), inflecTable.MultFastRateX(rowsR(4))];
-
-b = bar(x, y, 'facecolor', 'flat', 'LineWidth', 2);
-
-clr = [MDLFangColor(1)/255 MDLFangColor(2)/255 MDLFangColor(3)/255; 
-        MDLFsplColor(1)/255 MDLFsplColor(2)/255 MDLFsplColor(3)/255;
-        TPCColor(1)/255 TPCColor(2)/255 TPCColor(3)/255;
-        pArcColor(1)/255 pArcColor(2)/255 pArcColor(3)/255];
-b.CData = clr; 
-
-title('Right Hemisphere Fastest Rate of Change')
-xlabel('Tract')
-ylabel('Age')
-set(gca, 'FontSize', 24, 'FontName', 'Arial', 'LineWidth', 2);
-yax = get(gca,'yaxis');
-yax.FontAngle = 'italic';
-
-hold off 
-%}
-
-%==========================================================================
