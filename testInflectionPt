@@ -1,0 +1,61 @@
+clear all; close all; clc;
+
+x = 1:.1:25; x = transpose(x);
+y = -2*exp(-0.2*x);
+figure(1); 
+
+        % Detrend 'y' To Facilitate Analysis
+        y = detrend(y,1);                                    
+
+        plot(x, y); hold on;
+
+        
+        %this code is working! it's just not detrended is the issue.
+
+        %Store x and y values in ratetbl
+        ratetbl = table(x, y);
+        %remove duplicate points
+        ratetbl = unique(ratetbl, 'rows');
+     
+        %Assign x and y variables to new x and y vectors without duplicate
+        %points
+        y = ratetbl.y; 
+        x = ratetbl.x;
+    
+        % Calculate Numerical Derivative
+        dydx = gradient(y);% ./ gradient(x);
+%         dydx2 = diff(y) ./ diff(x);
+
+        %Save unordered derivatives in ratetbl                              
+        ratetbl.dydx = dydx;
+
+        %Sort derivatives 
+        ratetbl = unique(ratetbl, 'rows');
+        ratetbl = sortrows(ratetbl, 'dydx');                                      
+        [~, ind] = unique(ratetbl(:,1), 'first');
+        ratetbl = ratetbl(ind, :);
+     
+        [~, ind] = unique(ratetbl(:,"dydx"), 'first');
+        ratetbl = ratetbl(ind, :);
+        dydx = ratetbl.dydx; 
+    
+        %Interpolation Index Lower Limit
+        [maxdydx, idxmax] = max(dydx);
+        [mindydx, idxmin] = min(dydx);
+        idxrng = idxmin: idxmax; 
+    
+        %Find Inflection Point X-Value
+        inflptx = interp1(dydx(idxrng), ratetbl.x(idxrng), 0, 'linear');           
+
+        %Find Inflection Point Y-Value
+        inflpty = interp1(ratetbl.x, ratetbl.y, inflptx, 'linear');  
+
+        scatter(inflptx, inflpty, '*'); 
+
+        inflection_idx = find(diff(sign(diff(y)))) + 1;
+        plot(x(inflection_idx,1), y(inflection_idx,1), '*');
+
+        hold off;
+
+        figure(1);
+
