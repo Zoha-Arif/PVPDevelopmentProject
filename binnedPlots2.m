@@ -153,7 +153,9 @@ for z = 1:length(tractIDs)
     end
 
     idx = find(strcmp(colorProfiles.NameOfTrack, char(tractIDs(z))) == 1);
-    markerColor = [colorProfiles.Red(idx)/255, colorProfiles.Green(idx)/255, colorProfiles.Blue(idx)/255];
+    markerColor = [str2double(colorProfiles.Red{idx})/255, ...
+               str2double(colorProfiles.Green{idx})/255, ...
+               str2double(colorProfiles.Blue{idx})/255];
 
     %===========================================================================
     plotTitle = {char(tractIDs(z))};
@@ -401,22 +403,30 @@ plotTPCX = mean6666Tbl.X(plotTPC);
 plotTPCY = mean6666Tbl.Y(plotTPC);
 
 idxColor = find(strcmp(colorProfiles.NameOfTrack, 'rightpArc') == 1);
-markerColor = [colorProfiles.Red(idxColor)/255, colorProfiles.Green(idxColor)/255, colorProfiles.Blue(idxColor)/255]; 
+markerColor = [str2double(colorProfiles.Red{idxColor})/255, ...
+               str2double(colorProfiles.Green{idxColor})/255, ...
+               str2double(colorProfiles.Blue{idxColor})/255];
 fill(coordpArcX, coordpArcY, [markerColor(1)*0.75  markerColor(2)*0.75 markerColor(3)*0.75], 'LineStyle', 'none', 'facealpha', '0.3')
 plot(plotpArcX, plotpArcY, 'LineWidth', 3, 'color',  [markerColor(1)*0.90  markerColor(2)*0.90 markerColor(3)*0.90]);
 
 idxColor = find(strcmp(colorProfiles.NameOfTrack, 'rightMDLFang') == 1);
-markerColor = [colorProfiles.Red(idxColor)/255, colorProfiles.Green(idxColor)/255, colorProfiles.Blue(idxColor)/255];
+markerColor = [str2double(colorProfiles.Red{idxColor})/255, ...
+               str2double(colorProfiles.Green{idxColor})/255, ...
+               str2double(colorProfiles.Blue{idxColor})/255];
 fill(coordFangX, coordFangY, [markerColor(1)*0.75  markerColor(2)*0.75 markerColor(3)*0.75], 'LineStyle', 'none', 'facealpha', '0.3')
 plot(plotFangX, plotFangY, 'LineWidth', 3, 'color',  [markerColor(1)*0.90  markerColor(2)*0.90 markerColor(3)*0.90]);
 
 idxColor = find(strcmp(colorProfiles.NameOfTrack, 'rightMDLFspl') == 1);
-markerColor = [colorProfiles.Red(idxColor)/255, colorProfiles.Green(idxColor)/255, colorProfiles.Blue(idxColor)/255];
+markerColor = [str2double(colorProfiles.Red{idxColor})/255, ...
+               str2double(colorProfiles.Green{idxColor})/255, ...
+               str2double(colorProfiles.Blue{idxColor})/255];
 fill(coordFsplX, coordFsplY, [markerColor(1)*0.75  markerColor(2)*0.75 markerColor(3)*0.75], 'LineStyle', 'none', 'facealpha', '0.3')
 plot(plotFsplX, plotFsplY, 'LineWidth', 3, 'color',  [markerColor(1)*0.90  markerColor(2)*0.90 markerColor(3)*0.90]);
 
 idxColor = find(strcmp(colorProfiles.NameOfTrack, 'rightTPC') == 1);
-markerColor = [colorProfiles.Red(idxColor)/255, colorProfiles.Green(idxColor)/255, colorProfiles.Blue(idxColor)/255];
+markerColor = [str2double(colorProfiles.Red{idxColor})/255, ...
+               str2double(colorProfiles.Green{idxColor})/255, ...
+               str2double(colorProfiles.Blue{idxColor})/255];
 fill(coordTPCX, coordTPCY, [markerColor(1)*0.75  markerColor(2)*0.75 markerColor(3)*0.75], 'LineStyle', 'none', 'facealpha', '0.3')
 plot(plotTPCX, plotTPCY, 'LineWidth', 3, 'color',  [markerColor(1)*0.90  markerColor(2)*0.90 markerColor(3)*0.90]);
 
@@ -506,22 +516,30 @@ plotTPCX = mean6666Tbl.X(plotTPC);
 plotTPCY = mean6666Tbl.Y(plotTPC);
 
 idxColor = find(strcmp(colorProfiles.NameOfTrack, 'leftpArc') == 1);
-markerColor = [colorProfiles.Red(idxColor)/255, colorProfiles.Green(idxColor)/255, colorProfiles.Blue(idxColor)/255]; 
+markerColor = [str2double(colorProfiles.Red{idxColor})/255, ...
+               str2double(colorProfiles.Green{idxColor})/255, ...
+               str2double(colorProfiles.Blue{idxColor})/255];
 fill(coordpArcX, coordpArcY, [markerColor(1)*0.75  markerColor(2)*0.75 markerColor(3)*0.75], 'LineStyle', 'none', 'facealpha', '0.3')
 plot(plotpArcX, plotpArcY, 'LineWidth', 3, 'color',  [markerColor(1)*0.90  markerColor(2)*0.90 markerColor(3)*0.90]);
 
 idxColor = find(strcmp(colorProfiles.NameOfTrack, 'leftMDLFang') == 1);
-markerColor = [colorProfiles.Red(idxColor)/255, colorProfiles.Green(idxColor)/255, colorProfiles.Blue(idxColor)/255];
+markerColor = [str2double(colorProfiles.Red{idxColor})/255, ...
+               str2double(colorProfiles.Green{idxColor})/255, ...
+               str2double(colorProfiles.Blue{idxColor})/255];
 fill(coordFangX, coordFangY, [markerColor(1)*0.75  markerColor(2)*0.75 markerColor(3)*0.75], 'LineStyle', 'none', 'facealpha', '0.3')
 plot(plotFangX, plotFangY, 'LineWidth', 3, 'color',  [markerColor(1)*0.90  markerColor(2)*0.90 markerColor(3)*0.90]);
 
 idxColor = find(strcmp(colorProfiles.NameOfTrack, 'leftMDLFspl') == 1);
-markerColor = [colorProfiles.Red(idxColor)/255, colorProfiles.Green(idxColor)/255, colorProfiles.Blue(idxColor)/255];
+markerColor = [str2double(colorProfiles.Red{idxColor})/255, ...
+               str2double(colorProfiles.Green{idxColor})/255, ...
+               str2double(colorProfiles.Blue{idxColor})/255];
 fill(coordFsplX, coordFsplY, [markerColor(1)*0.75  markerColor(2)*0.75 markerColor(3)*0.75], 'LineStyle', 'none', 'facealpha', '0.3')
 plot(plotFsplX, plotFsplY, 'LineWidth', 3, 'color',  [markerColor(1)*0.90  markerColor(2)*0.90 markerColor(3)*0.90]);
 
 idxColor = find(strcmp(colorProfiles.NameOfTrack, 'leftTPC') == 1);
-markerColor = [colorProfiles.Red(idxColor)/255, colorProfiles.Green(idxColor)/255, colorProfiles.Blue(idxColor)/255];
+markerColor = [str2double(colorProfiles.Red{idxColor})/255, ...
+               str2double(colorProfiles.Green{idxColor})/255, ...
+               str2double(colorProfiles.Blue{idxColor})/255];
 fill(coordTPCX, coordTPCY, [markerColor(1)*0.75  markerColor(2)*0.75 markerColor(3)*0.75], 'LineStyle', 'none', 'facealpha', '0.3')
 plot(plotTPCX, plotTPCY, 'LineWidth', 3, 'color',  [markerColor(1)*0.90  markerColor(2)*0.90 markerColor(3)*0.90]);
 
