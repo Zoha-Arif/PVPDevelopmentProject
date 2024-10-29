@@ -6,27 +6,28 @@ measure = 'fa';
 
 %fetching all subject's subfolders and storing them in subfolders
 %insert local path to track profiles here by changing value of mainpath.
-mainpath = '/Users/land/Desktop/projectTrackProfiles/data2/proj-64aeafb13a63cf17375ff249';
+mainpath = '/Volumes/LANDLAB/projects/hbn/projectTrackProfiles/data2/proj-64aeafb13a63cf17375ff249';
 topLevelFolder = dir(mainpath);
 
 subfolders = topLevelFolder([topLevelFolder(:).isdir]); %find names of all subject's subfolders
 
-% (!) Uncomment line if running script on data for the first time(!)
+% (!) Uncomment line 16 if running script on data for the first time(!)
 % (!) Removes the unnecessary '.' and '..' files (!)
 % subfolders = subfolders(arrayfun(@(x) x.name(1), subfolders) ~= '.');
 
 % Keep only names that are subject folders.
 subfolders = subfolders(arrayfun(@(x) x.name(1), subfolders) == 's');
 
-%tables is a cell array to store each sub's table in. We can use explicit loops or cellfun to
-%apply the same code to each table. 
+%tables is a cell array to store each sub's table in.
 tables = {}; 
 Headers = {'subjectID','structureID', 'nodeID', 'fa'};
 Tlong = cell2table(cell(0,4),'VariableNames', Headers);
+%Tlong: Stores detailed, node-level data for each subject and tract.
+%Tshort: Stores summary, subject-level data, with each tract's measure averaged across nodes.
 
 %insert local path to csv here by changing value of mainpath.
-mainpath2 = '/Users/land/Desktop/projectTrackProfiles/supportFiles/participants2.csv'; 
-T1 = readtable(mainpath2);
+mainpathCSV = '/Volumes/LANDLAB/projects/hbn/projectTrackProfiles/supportFiles/participants2.csv'; 
+T1 = readtable(mainpathCSV);
 
 %============== Generate Tlong ==============
 
@@ -89,8 +90,7 @@ end
 %Tlong(all(isnan(Tlong()),2),:) = [];    %rows that are all nan
 
 %insert local path to csv here by changing value of mainpath.
-mainpath = '/Users/land/Desktop/projectTrackProfiles/supportFiles/participants2.csv'; 
-T = readtable(mainpath);
+T = readtable(mainpathCSV);
 
 %get only subject ids
 subIDs = unique(Tlong.subjectID);
@@ -145,6 +145,10 @@ end
 %Tlong.Bins = str2double(Tlong.Bins);
 
 %============== Generate Tshort ==============
+%After Tlong is created, this for loop iterates over each unique 
+%subjectID and structureID (tract ID). For each unique tract in each 
+%subject, Tshort computes the mean fa and stores it.
+
 Tshort = T; 
 tractIDs = unique(Tlong.structureID);
 
@@ -163,7 +167,7 @@ end
 
 %============== Export Tshort and Tlong as a csv ==============
 %local path to save table: 
-mainpath = '/Users/land/Desktop/projectTrackProfiles/supportFiles';
+mainpath = '/Volumes/LANDLAB/projects/hbn/projectTrackProfiles/supportFiles';
 
 table_path_format_tshort = fullfile(mainpath, 'Tshort.csv');
 table_path_format_tlong = fullfile(mainpath, 'Tlong.csv');

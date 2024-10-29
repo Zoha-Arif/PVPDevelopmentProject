@@ -8,8 +8,8 @@ measure = 'fa';
 numNodes = 200 - 20; 
 
 %insert local path of Tlong.csv file
-Tlong = '/Users/land/Desktop/projectTrackProfiles/supportFiles/Tlong.csv';
-colorProfiles = '/Users/land/Desktop/projectTrackProfiles/supportFiles/colorProfiles.csv';
+Tlong = '/Volumes/LANDLAB/projects/hbn/projectTrackProfiles/supportFiles/Tlong.csv';
+colorProfiles = '/Volumes/LANDLAB/projects/hbn/projectTrackProfiles/supportFiles/colorProfiles.csv';
 
 %convert csv into a table.
 Tlong = readtable(Tlong); 
