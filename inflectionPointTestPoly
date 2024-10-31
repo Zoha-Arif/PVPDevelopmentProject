@@ -1,21 +1,23 @@
+%Testing code that calculates inflection points for a polynomial function
+
 % Define x and y for either a known function or numerical data
 % Example for a known function y = x^5 + 5*x^3
 x = linspace(-10, 10, 5000); % Higher resolution for better detection
 y = x.^7 - 7*x.^5 + 14*x.^3 - 7*x; % Define the function
 
-% Step 1: Interpolate and smooth the data for higher resolution
+% 1. Interpolate and smooth the data for higher resolution
 x_interp = linspace(min(x), max(x), 10000); % High-resolution x values
 y_interp = interp1(x, y, x_interp, 'pchip'); % Smooth interpolation
 y_smooth = smoothdata(y_interp, 'gaussian', 50); % Stronger Gaussian smoothing
 
-% Step 2: Calculate first and second derivatives
+% 2. Calculate first and second derivatives
 dy_dx = gradient(y_smooth) ./ gradient(x_interp); % First derivative
 d2y_dx2 = gradient(dy_dx) ./ gradient(x_interp); % Second derivative
 
-% Step 3: Detect zero-crossings in the second derivative
+% 3. Detect zero-crossings in the second derivative
 sign_changes = find(diff(sign(d2y_dx2)) ~= 0); % Detect strict sign changes
 
-% Step 4: Initialize arrays for inflection points, ensuring unique detections
+% 4. Initialize arrays for inflection points, ensuring unique detections
 inflection_points_x = [];
 inflection_points_y = [];
 
@@ -38,7 +40,7 @@ for i = 1:length(sign_changes)
     end
 end
 
-% If no inflection points are found, display a message
+% 5. If no inflection points are found, display a message
 if isempty(inflection_points_x)
     disp('No inflection points found.');
 end
