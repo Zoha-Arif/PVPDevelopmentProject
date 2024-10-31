@@ -2,8 +2,9 @@
 w/ Professor Sophia Vinci-Booher (@svincibo on Github) @ The Learning and NeuroDevelopment Lab (LaND Lab)
 <br>
 <br> importData1.m = imports diffusion metrics downloaded from brainlife for each subject
-<br> binnedPlots2.m = generates tract profiles
-<br> growthCurveModel.m = Lebel (2010) paper model
+<br> tractProfile.m = generates tract profiles
+<br> Lebel2010Model.m = Lebel (2010) paper model
+<br> inflectionPointTest{x}.m = test files for the inflection point method
 <br> This is code used for statistical analyses and figure creation in Arif, Z., Pestilli, F., & Vinci-Booher, S. White Matter Tracts Connecting Ventral and Dorsal Visual Streams Have Distinct Microstructural Profiles and Developmental Trajectories
 <br>
 <br> Manuscript in-progress 
