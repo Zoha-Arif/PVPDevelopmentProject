@@ -53,6 +53,7 @@ for t = 1:length(tractIDs)
 
     %Defining model variables
     Age = Tshort.Age; 
+    
     %define sex as a categorical variable.
     Sex = categorical(Tshort.Sex); 
     yVar = Tshort.(char(tractIDs(t)));
@@ -63,8 +64,7 @@ for t = 1:length(tractIDs)
     %Remove any rows with missing data (NaN or empty character) from tbl 
     tbl(any(ismissing(tbl), 2), :) = [];
 
-    %Assign Age, Sex, and yVar to new tbl columns with removed rows
-    %that had missing values
+    %Assign Age, Sex, and yVar to new tbl columns with removed row that had missing values
     Age = tbl.Age; 
     Sex = tbl.Sex; 
     yVar = tbl.yVar; 
@@ -83,7 +83,10 @@ for t = 1:length(tractIDs)
     tbl(any(ismissing(tbl), 2), :) = [];
     tbl(~yVar, :) = []; 
 
-    % Define the nonlinear model function: A*age*exp(-B*age) + C
+    %======================================================================
+    % Generating the model
+    
+    % Define the poisson model function: A*age*exp(-B*age) + C
     modelFun = @(b, Age) b(1) * Age .* exp(-b(2) * Age) + b(3);
 
     % Set initial guesses for parameters A, B, and C
@@ -98,9 +101,8 @@ for t = 1:length(tractIDs)
                str2double(colorProfiles.Green{idx})/255, ...
                str2double(colorProfiles.Blue{idx})/255];
  
-    tblNumeric = tbl;
    % Define a range of ages for plotting the fitted response
-    ageRange = linspace(min(tblNumeric.Age), max(tblNumeric.Age), 100)';
+    ageRange = linspace(min(tbl.Age), max(tbl.Age), 100)';
 
     % Convert ageRange to a table with the same column name as used in mdl
     ageRangeTable = table(ageRange, 'VariableNames', {'Age'});
@@ -114,10 +116,10 @@ for t = 1:length(tractIDs)
 
     % Plot the original data
     figure;
-    scatter(tblNumeric.Age, tblNumeric.yVar, 'MarkerFaceColor', markerColor, 'DisplayName', 'Data');
-    hold on;
+    hold on
+    scatter(tbl.Age, tbl.yVar, 100, 'MarkerEdgeColor', 'white', 'MarkerFaceColor', markerColor, 'Marker', 'o');
 
-    % Plot the fitted nonlinear model response
+    % Plot the fitted poisson model
     plot(ageRange, fittedResponse, 'LineWidth', 2, 'Color', markerColor, 'DisplayName', 'Fitted Curve');
 
     % Plot the confidence intervals
@@ -126,30 +128,29 @@ for t = 1:length(tractIDs)
     % Add labels and title
     xlabel('Age');
     ylabel('yVar');
-    title(['Nonlinear Model Fit with Confidence Interval for ', char(tractIDs(t))]);
-    legend;
     
     %======= Calculating Inflection & Fastest Rate of Change =======
+    
     % Define a high-resolution age range for interpolation
     x = linspace(min(tbl.Age), max(tbl.Age), 1000); 
 
-    % Calculate the predicted values (y) from your model over this range
-    x_table = table(x', 'VariableNames', {'Age'}); % Convert to table if needed
+    % Calculate the predicted values (y)
+    x_table = table(x', 'VariableNames', {'Age'});
     y = predict(mdl, x_table); % Get predicted values using the fitted model
 
-    % Step 1: Interpolate and smooth the data for higher resolution
+    % 1. Interpolate and smooth the data for higher resolution
     x_interp = linspace(min(x), max(x), 10000); % High-resolution x values
     y_interp = interp1(x, y, x_interp, 'pchip'); % Smooth interpolation
     y_smooth = smoothdata(y_interp, 'gaussian', 50); % Stronger Gaussian smoothing
 
-    % Step 2: Calculate first and second derivatives
+    % 2. Calculate first and second derivatives
     dy_dx = gradient(y_smooth) ./ gradient(x_interp); % First derivative
     d2y_dx2 = gradient(dy_dx) ./ gradient(x_interp); % Second derivative
 
-    % Step 3: Detect zero-crossings in the second derivative
+    % 3. Detect zero-crossings in the second derivative
     sign_changes = find(diff(sign(d2y_dx2)) ~= 0); % Detect strict sign changes
 
-    % Step 4: Initialize arrays for inflection points, ensuring unique detections
+    % 4. Initialize arrays for inflection points, ensuring unique detections
     inflection_points_x = [];
     inflection_points_y = [];
 
@@ -171,161 +172,29 @@ for t = 1:length(tractIDs)
          end
     end
 
-    % If no inflection points are found, display a message
+    % 5. If no inflection points are found, display a message
     if isempty(inflection_points_x)
-        disp('No inflection points found.');
+        disp({'No inflection points found for', char(tractIDs(t))});
     end
 
-    scatter(inflection_points_x, inflection_points_y, 100, 'red', 'filled', 'DisplayName', 'Inflection Points');
+    %Plot the inflection points
+    scatter(inflection_points_x, inflection_points_y, 100, 'red', 'filled');
+    
     hold off
-
-    %{
-    %Plotting the model
-    h = plotAdjustedResponse(mdl, 'Age', 'MarkerFaceColor', markerColor); 
-    
-    %Get data for plotting the confidence intervals and add CI to plot.
-    j = array2table(cat(2, h(1).XData', h(1).YData')); j.Properties.VariableNames =  {'x', 'y'};
-    mdlci = fitlm(j, 'y~x^2');
-
-    clear f; 
-
-    outliers = [];
-
-    %Examine model residuals: boxplot of raw residuals.
-    figure(t + length(tractIDs)); k = figure('visible', 'off');
-    m = mdlci.Residuals.Raw;
-    e = eps(max(m(:)));
-    boxplot(m)
-    
-    % Suppress figure display.
-    set(gcf,'Visible','off');              
-    set(0,'DefaultFigureVisible','off');
-    %â
-    % Get indices of the outliers.
-    h1 = flipud(findobj(gcf,'tag','Outliers')); % flip order of handles
-    for jj = 1 : length( h1 )
-        x =  get( h1(jj), 'XData' );
-        y =  get( h1(jj), 'YData' );
-        for ii = 1 : length( x )
-            if not( isnan( x(ii) ) )
-                ix = find( abs( m(:,jj)-y(ii) ) < e );
-                outliers = cat(1, outliers, ix);
-                %                 text( x(ii), y(ii), sprintf( '\\leftarrowY%02d', ix ) )
-            end
-        end
-    end
-%â
-    k = gcf; close(k);
-%â
-    % Examine robust weights: boxplot of robust weights.
-    figure(t + length(tractIDs) + 1); k = figure('visible', 'off');
-    m = mdlci.Robust;
-    e = eps(max(m(:)));
-    boxplot(m);
-    
-    % Suppress figure display.
-    set(gcf, 'Visible', 'off');              
-    set(0, 'DefaultFigureVisible', 'off');
-%â
-    % Get indices of the outliers.
-    h1 = flipud(findobj(gcf,'tag','Outliers')); % flip order of handles
-    for jj = 1 : length( h1 )
-        x =  get( h1(jj), 'XData' );
-        y =  get( h1(jj), 'YData' );
-        for ii = 1 : length( x )
-            if not( isnan( x(ii) ) )
-                ix = find( abs( m(:,jj)-y(ii) ) < e );
-                outliers = cat(1, outliers, ix);
-            end
-        end
-    end
-%â
-    outliers = sort(outliers);
-%â
-    k = gcf; close(k);
-%â
-    k = figure('visible', 'on');
-    set(gcf, 'Visible', 'off');              
-    set(0, 'DefaultFigureVisible', 'off');
-%
-
-    clf;
-
-    %Remove outliers
-    tbl(outliers, :) = []; 
-  
-    %======================================================================
-    %Recalculate the model & confidence intervals without outliers
-
-    %Generating the new model
-    mdl = fitlm(tbl, Q);
-
-    %Plotting the new model
-    h = plotAdjustedResponse(mdl, 'Age', 'MarkerEdgeColor', markerColor, 'MarkerFaceColor', markerColor);  
-    pltLeg = legend('', '', '');
-    set(pltLeg,'visible','off')
-    z = get(gca, 'children'); 
-    set(0, 'DefaultFigureVisible', 'off');
-
-
-    %Get data for plotting the confidence intervals and add CI to plot.
-    j = array2table(cat(2, h(1).XData', h(1).YData')); j.Properties.VariableNames =  {'x', 'y'};
-    mdlci = fitlm(j, 'y~x^2');
-
-    clf(figure(t));
-
-    f = figure(t);
-    %%f.Position = [startingx startingy width height];
-    f.Position = [1000 1000 800 700];
-
-    hold on 
-
-    %Plot the model
-    pci = plot(mdlci);
-    set(pci, 'MarkerEdgeColor', 'white', 'MarkerFaceColor', markerColor, 'MarkerSize', 12, 'Marker', 'o')
-    x = tbl.Age; y = tbl.yVar; CI = (tbl.yVar)/2; 
-    
-    %Fill in confidence interval
-    cbHandles = findobj(pci,'DisplayName','Confidence bounds');
-    cbHandles = findobj(pci,'LineStyle', cbHandles.LineStyle, 'Color', cbHandles.Color);
-
-    upperCBHandle = cbHandles(2,:);
-    lowerCBHandle = cbHandles(1,:);
-    
-    xData = upperCBHandle.XData; 
-    k = patch([xData xData(end:-1:1) xData(1)], [lowerCBHandle.YData upperCBHandle.YData(end:-1:1) lowerCBHandle.YData(1)], 'b');
-    set(k, 'EdgeColor', 'none', 'FaceColor', [markerColor(1)*0.55  markerColor(2)*0.55 markerColor(3)*0.55], 'FaceAlpha', '0.2')
-
-    %Grab trendline and datapoints
-    dataHandle = findobj(h,'DisplayName','data');
-    fitHandle = findobj(h,'DisplayName','fit');
-    dataHandle2 = findobj(pci,'DisplayName','Data');
-    fitHandle2 = findobj(pci,'DisplayName','Fit');
 
     %===========================================================================
     %Style Settings for the Plot
 
-    %Style the trendline
-    set(fitHandle2, 'Color', [markerColor(1) markerColor(2) markerColor(3)], 'LineWidth', 3)
-
     %Style the plot
     pltLeg = legend('', '', '');
-    set(fitHandle2, 'Marker', 'none')
     set(pltLeg,'visible','off')
-    set(fitHandle, 'Visible', 'off')
-    set(h, 'Visible', 'off')
-    plot(h(1).XData, h(1).YData, 'MarkerEdgeColor', 'white', 'MarkerFaceColor', markerColor, 'MarkerSize', 12, 'Marker', 'o', 'LineStyle', 'none')
 
     %Add title and color to the model
     plotTitle = {char(tractIDs(t))};
-    plotTitle = strjoin(['Multiple Nonlinear Model for', plotTitle]);
+    plotTitle = strjoin(['Poisson (Lebel 2010) Model for', plotTitle]);
     title(plotTitle);
     xlabel('Age (years)');
     ylabel(measure);
-
-    %Delete confidence bounds border 
-    delete(pci(3))
-    delete(pci(4))
 
     % Set up plot and measure-specific details.
     capsize = 0;
@@ -353,7 +222,7 @@ for t = 1:length(tractIDs)
     yax = get(gca,'yaxis');
     yax.TickDirection = 'out';
     yax.TickLength = [yticklength yticklength];
-    set(gca, 'YLim', [0.3 0.6], 'YTick', [0.3 0.45 0.6]);
+    set(gca, 'YLim', [0.2 0.6], 'YTick', [0.2 0.4 0.6]);
     yax.FontName = fontname;
     yax.FontSize = fontsize;
     yax.FontAngle = fontangle;
@@ -363,77 +232,9 @@ for t = 1:length(tractIDs)
 
     %===========================================================================
     %Add adjusted R-squared & AIC values to table.
-    rsqTableAdj.MultNonLin(t) = mdlci.Rsquared.Adjusted;
-    rsqTableOrd.MultNonLin(t) = mdlci.Rsquared.Ordinary;
-    aicTable.MultNonLin(t)= mdlci.ModelCriterion.AIC;
-
-     %======= Calculating Inflection & Fastest Rate of Change =======
-     x = unique(mdlci.Variables.x);
-     y = predict(mdlci, x);
-     
-     %mdlFormula = 'yVar ~ -0.00373Age^2 + 0.4082Sex';
-     %f2 = diff(mdlFormula);
-     %f3 = diff(f2);
-     %inflec_pt = fsolve(f2, 'MaxDegree', 3);
-     %double(inflex_pt); 
-     
-     % Detrend 'y' To Facilitate Analysis
-     y = detrend(y,1);                                     
-
-     %Store x and y values in ratetbl
-     ratetbl = table(x, y);
-     %remove duplicate points
-     ratetbl = unique(ratetbl, 'rows');
-     
-     %Assign x and y variables to new x and y vectors without duplicate
-     %points
-     y = ratetbl.y; 
-     x = ratetbl.x;
-    
-     % Calculate Numerical Derivative
-     dydx = gradient(y) ./ gradient(x);
-     dyydx  = gradient(dydx) ./ gradient(x);
-
-     %Save unordered derivatives in ratetbl                              
-     ratetbl.dydx = dydx;
-     ratetbl.dyydx = dyydx;
-
-     %Sort derivatives 
-     ratetbl = sortrows(ratetbl, 'dydx');                                      
-     [~, ind] = unique(ratetbl(:,1), 'first');
-     ratetbl = ratetbl(ind, :);
-     
-     [~, ind] = unique(ratetbl(:,"dydx"), 'first');
-     ratetbl = ratetbl(ind, :);
-     dydx = ratetbl.dydx; 
-    
-     %Interpolation Index Lower Limit
-     [maxdydx, idxmax] = max(dydx);
-     [mindydx, idxmin] = min(dydx);
-     idxrng = idxmin: idxmax; 
-    
-     %inflection_idx = find(diff(sign(diff(y)))) + 1;
-    
-     %Find Inflection Point X-Value
-     %xi = 3:1:21; 
-     inflptx = interp1(dydx(idxrng), ratetbl.x(idxrng), 0, 'linear');           
-
-     %Find Inflection Point Y-Value
-     x = unique(mdlci.Variables.x);
-     y = predict(mdlci, x);
-     inflpty = interp1(x, y, inflptx, 'linear'); 
-    
-    %=========================================================================================
-    f(1) = plot(inflptx, inflpty, 's', 'MarkerEdgeColor', 'white', 'MarkerFaceColor', 'r', ...
-        'MarkerSize', 50, 'DisplayName','Inflection Point');
-
-    %calculating fastest rate of change by finding maximum dy/dx in
-    %magnitude
-    [~, fastestRate] = max(ratetbl.dydx); 
-    fr = ratetbl(fastestRate, :);
-
-    f(2) = plot(fr.x(1), fr.y(1), '>', 'MarkerEdgeColor', 'white', 'MarkerFaceColor', 'r', ...
-        'MarkerSize', 50, 'DisplayName','Fastest Rate of Change');
+    %rsqTableAdj.MultNonLin(t) = mdlci.Rsquared.Adjusted;
+    %rsqTableOrd.MultNonLin(t) = mdlci.Rsquared.Ordinary;
+    %aicTable.MultNonLin(t)= mdlci.ModelCriterion.AIC;
 
     %legend
     %lgd = legend(f, {"Inflection Point","Fastest Rate of Change"});
@@ -443,6 +244,7 @@ for t = 1:length(tractIDs)
     %pbaspect([1 1 1]);
     
     %=========================================================================================
+     %{
     % Calculate the difference between the first and last points of mdlci
     first_point = mdlci.Variables.y(1);
     last_point = mdlci.Variables.y(end);
@@ -462,7 +264,6 @@ for t = 1:length(tractIDs)
     inflecTable.MultFastRateY(t) = fr.y(1); 
 
     %============== Bootstrapping for ANOVA ==============
-    %{
     hold on 
 
     figure(5*(t + length(tractIDs)))
@@ -579,8 +380,6 @@ for t = 1:length(tractIDs)
     
     hold off 
     %} 
-for the nonlim model remove the following     
-               %}
     
          
 end
