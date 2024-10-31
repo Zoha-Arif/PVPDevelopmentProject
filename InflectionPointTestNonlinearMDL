@@ -1,0 +1,70 @@
+%Testing code that calculates inflection points for a synthetic fitnlm (nonlinear) model
+
+% 1. Define a non-linear model function with both positive and negative exponentials
+nonlin_model = @(b, x) b(1) * exp(b(2) * x) + b(3) * exp(-b(4) * x);
+
+% 2. Generate synthetic data with inflection points
+x = linspace(-10, 10, 500)'; % Column vector as input for the model
+y = 2 * exp(0.5 * x) - 3 * exp(-0.3 * x) + randn(size(x)) * 0.1; % Modified y for inflection points
+
+% 3. Initial parameter guesses [a, b, c, d]
+initial_guesses = [2, 0.5, -3, 0.3];
+
+% 4.Fit the non-linear model using fitnlm
+mdl = fitnlm(x, y, nonlin_model, initial_guesses);
+
+% 5. Predict y values using the model at high resolution for inflection detection
+x_highres = linspace(min(x), max(x), 10000)'; % High-resolution x values
+y_pred = predict(mdl, x_highres); % Predicted values at high resolution
+
+% 6. Apply inflection point detection
+% Interpolate and smooth the data
+y_interp = interp1(x_highres, y_pred, x_highres, 'pchip'); % Smooth interpolation
+y_smooth = smoothdata(y_interp, 'gaussian', 50); % Stronger Gaussian smoothing
+
+% 7. Calculate first and second derivatives
+dy_dx = gradient(y_smooth) ./ gradient(x_highres); % First derivative
+d2y_dx2 = gradient(dy_dx) ./ gradient(x_highres); % Second derivative
+
+% 8. Detect zero-crossings in the second derivative
+sign_changes = find(diff(sign(d2y_dx2)) ~= 0); % Detect strict sign changes
+
+% 9. Initialize arrays for inflection points, ensuring unique detections
+inflection_points_x = [];
+inflection_points_y = [];
+
+for i = 1:length(sign_changes)
+    inflection_x = x_highres(sign_changes(i));
+    inflection_y = y_smooth(sign_changes(i));
+    
+    % Ignore points near the edges, e.g., within 5% of each end of the x range
+    if inflection_x > x_highres(round(0.05 * length(x_highres))) && ...
+       inflection_x < x_highres(round(0.95 * length(x_highres)))
+    
+        % Ensure unique inflection points based on proximity
+        if isempty(inflection_points_x) || all(abs(inflection_x - inflection_points_x) > 1e-3)
+            inflection_points_x = [inflection_points_x, inflection_x];
+            inflection_points_y = [inflection_points_y, inflection_y];
+            
+            % Display each unique inflection point
+            disp(['Inflection point: (x, y) = (' num2str(inflection_x) ', ' num2str(inflection_y) ')']);
+        end
+    end
+end
+
+% If no inflection points are found, display a message
+if isempty(inflection_points_x)
+    disp('No inflection points found.');
+end
+
+% 10. Plot original data, model prediction, and inflection points
+figure;
+scatter(x, y, 'b'); % Original data
+hold on;
+plot(x_highres, y_pred, 'r', 'LineWidth', 1.5); % Model predictions
+scatter(inflection_points_x, inflection_points_y, 100, 'g', 'filled'); % Inflection points
+title('Non-linear Exponential Fit with Inflection Points');
+xlabel('x');
+ylabel('y');
+legend('Data', 'Model Fit', 'Inflection Points');
+hold off;
