@@ -90,7 +90,7 @@ for t = 1:length(tractIDs)
     modelFun = @(b, Age) b(1) * Age .* exp(-b(2) * Age) + b(3);
 
     % Set initial guesses for parameters A, B, and C
-    initialGuess = [1, 0.01, 0.1];  % Adjust these based on your data
+    initialGuess = [1, 0.01, 0.1];  % Adjust these based on data
 
 	%Fit the nonlinear model to the data
     mdl = fitnlm(tbl, modelFun, initialGuess);
