@@ -90,7 +90,7 @@ for t = 1:length(tractIDs)
     modelFun = @(b, Age) b(1) * Age .* exp(-b(2) * Age) + b(3);
 
     % Set initial guesses for parameters A, B, and C
-    initialGuess = [1, 0.01, 0.1];  % Adjust these based on data
+    initialGuess = [1, 0.01, 0.1];  % Adjust these based on your data
 
 	%Fit the nonlinear model to the data
     mdl = fitnlm(tbl, modelFun, initialGuess);
@@ -230,6 +230,45 @@ for t = 1:length(tractIDs)
     %change figure background to white
     set(gcf, 'color', 'w')
 
+    %===========================================================================
+    %{
+    %Curvature Analysis
+    
+    % 1. Calculate curvature
+    curvature = abs(d2y_dx2) ./ (1 + dy_dx.^2).^(3/2);
+
+    % 2. Curvature threshold
+    curvature_threshold = 0.02; % Adjust this based on your data’s scale
+
+    % 3. Define the margin as a percentage of the total length (e.g., 2% of each endpoint)
+    n_points = length(x_interp);
+    exclude_idx = round(0.02 * n_points); % Exclude 5% of points at each endpoint
+
+    % 4. Define the analysis region, excluding the endpoints
+    analysis_region = exclude_idx + 1 : n_points - exclude_idx;
+
+    % 5. Find points within the analysis region where curvature exceeds the threshold
+    high_curvature_idx = analysis_region(curvature(analysis_region) > curvature_threshold);
+
+    % 6. Get the corresponding x and y values for high curvature points
+    high_curvature_x = x_interp(high_curvature_idx);
+    high_curvature_y = y_smooth(high_curvature_idx);
+
+    % 7. Plot the results
+    hold on;
+    scatter(high_curvature_x, high_curvature_y, 300, 'm', 'filled'); % High curvature points
+
+    % 8. Plot curvature as a secondary axis for visualization
+    yyaxis right
+    plot(x_interp, curvature, 'm-', 'LineWidth', 1.2); % Curvature plot
+    ylabel('Curvature (\kappa)');
+    
+    % 9. Display detected maximum and minimum curvature points
+    disp('High Curvature Points (x, y):');
+    disp([high_curvature_x, high_curvature_y]);
+    
+    hold off; 
+    %} 
     %===========================================================================
     %Add adjusted R-squared & AIC values to table.
     %rsqTableAdj.MultNonLin(t) = mdlci.Rsquared.Adjusted;
