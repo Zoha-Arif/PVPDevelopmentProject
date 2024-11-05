@@ -146,7 +146,7 @@ for t = 1:length(tractIDs)
     % Calculate: asymptote - (0.9 * (asymptote - minimum))
     asymptote_90 = C - (0.9 * (C - minValue));
 
-    % Plot Asymptote
+    % Plot asymptote
     yline(asymptote_90, '--r', 'LineWidth', 2.5, 'LabelHorizontalAlignment', 'left');
     
     % Find the x-coordinate of the asymptote 
