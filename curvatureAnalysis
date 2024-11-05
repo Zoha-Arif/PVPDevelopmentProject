@@ -1,0 +1,74 @@
+% Define a non-linear model function with both positive and negative exponentials
+nonlin_model = @(b, x) b(1) * exp(b(2) * x) + b(3) * exp(-b(4) * x);
+
+% Generate synthetic data with inflection points
+x = linspace(-10, 10, 500)'; % Column vector as input for the model
+y = 2 * exp(0.5 * x) - 3 * exp(-0.3 * x) + randn(size(x)) * 0.1; % Modified y for inflection points
+
+% Initial parameter guesses [a, b, c, d]
+initial_guesses = [2, 0.5, -3, 0.3];
+
+% Fit the non-linear model using fitnlm
+mdl = fitnlm(x, y, nonlin_model, initial_guesses);
+
+% Predict y values using the model at high resolution for inflection detection
+x_highres = linspace(min(x), max(x), 10000)'; % High-resolution x values
+y_pred = predict(mdl, x_highres); % Predicted values at high resolution
+
+% Interpolate and smooth the data
+y_interp = interp1(x_highres, y_pred, x_highres, 'pchip'); % Smooth interpolation
+y_smooth = smoothdata(y_interp, 'gaussian', 50); % Stronger Gaussian smoothing
+
+% Calculate first and second derivatives
+dy_dx = gradient(y_smooth) ./ gradient(x_highres); % First derivative
+d2y_dx2 = gradient(dy_dx) ./ gradient(x_highres); % Second derivative
+
+% Calculate curvature using the formula
+curvature = abs(d2y_dx2) ./ (1 + dy_dx.^2).^(3/2);
+
+% Ignore curvature at the edges (5% from each end)
+edge_cutoff = round(0.05 * length(x_highres));
+curvature_inner = curvature(edge_cutoff:end-edge_cutoff);
+x_inner = x_highres(edge_cutoff:end-edge_cutoff);
+y_inner = y_pred(edge_cutoff:end-edge_cutoff);
+
+% Find local maxima and minima in the curvature (within the inner range)
+[curvature_max, max_idx_inner] = findpeaks(curvature_inner); % Maximum curvature points
+[curvature_min, min_idx_inner] = findpeaks(-curvature_inner); % Minimum curvature points (negated for minima)
+
+% Adjust indices to original x_highres range
+max_idx = max_idx_inner + edge_cutoff - 1;
+min_idx = min_idx_inner + edge_cutoff - 1;
+
+% Get the corresponding x and y values for curvature maxima and minima
+curvature_max_x = x_highres(max_idx);
+curvature_max_y = y_pred(max_idx);
+curvature_min_x = x_highres(min_idx);
+curvature_min_y = y_pred(min_idx);
+
+% Plot the results
+figure;
+hold on;
+plot(x, y, 'o', 'MarkerEdgeColor', 'k', 'MarkerFaceColor', 'b'); % Original data points
+plot(x_highres, y_pred, 'r-', 'LineWidth', 1.5); % Fitted model
+scatter(curvature_max_x, curvature_max_y, 100, 'g', 'filled'); % Mark maximum curvature points
+scatter(curvature_min_x, curvature_min_y, 100, 'c', 'filled'); % Mark minimum curvature points
+
+% Plot curvature as a secondary axis for visualization
+yyaxis right
+plot(x_highres, curvature, 'm-', 'LineWidth', 1.2); % Curvature plot
+ylabel('Curvature (\kappa)');
+
+% Label the plot
+title('Curvature Analysis: Maxima and Minima of Curvature');
+xlabel('x');
+ylabel('y');
+legend('Data', 'Model Fit', 'Max Curvature Points', 'Min Curvature Points', 'Curvature');
+hold off;
+
+% Display detected maximum and minimum curvature points
+disp('Maximum Curvature Points (x, y):');
+disp([curvature_max_x, curvature_max_y]);
+
+disp('Minimum Curvature Points (x, y):');
+disp([curvature_min_x, curvature_min_y]);
