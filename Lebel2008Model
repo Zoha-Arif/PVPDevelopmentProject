@@ -12,9 +12,11 @@ rsqTableAdj = '/Volumes/LANDLAB/projects/hbn/projectTrackProfiles/supportFiles/r
 rsqTableOrd = '/Volumes/LANDLAB/projects/hbn/projectTrackProfiles/supportFiles/rsqTableOrd.csv';
 inflecTable = '/Volumes/LANDLAB/projects/hbn/projectTrackProfiles/supportFiles/inflecTable.csv';
 aicTable = '/Volumes/LANDLAB/projects/hbn/projectTrackProfiles/supportFiles/aicTable.csv';
-anovaBootTable = '/Volumes/LANDLAB/projects/hbn/projectTrackProfiles/supportFiles/anovaBootTable.csv';
 
 differenceTable = table('Size', [0, 2], 'VariableTypes', {'string', 'double'}, 'VariableNames', {'TractID', 'Difference'});
+anovaBootTable = table('Size', [0, 6], 'VariableTypes', {'double', 'string', 'string', 'string', 'double', 'double'}, ...
+    'VariableNames', ...
+    {'SampleNum', 'TractIDs', 'Hemisphere', 'Tract', 'AsymptoteY', 'AsymptoteX'});
 
 %Convert csv into a table.
 Tshort = readtable(Tshort); 
@@ -23,8 +25,7 @@ colorProfiles = readtable(colorProfiles);
 rsqTableAdj = readtable(rsqTableAdj);
 rsqTableOrd = readtable(rsqTableOrd);
 inflecTable = readtable(inflecTable);
-aicTable = readtable(aicTable); 
-anovaBootTable = readtable(anovaBootTable); 
+aicTable = readtable(aicTable);
 anovaBootTable.Hemisphere = categorical(anovaBootTable.Hemisphere);
 anovaBootTable.Tract = categorical(anovaBootTable.Tract);
 asymptoteTable = table('Size', [0, 3], 'VariableTypes', {'string', 'double', 'double'}, 'VariableNames', {'tractName', 'asymptote', 'x-intersect'});
@@ -87,7 +88,7 @@ for t = 1:length(tractIDs)
     %======================================================================
     % Generating the model
     
-      % Define the new model function: C + A * exp(-Age / t)
+    % Define the new model function: C + A * exp(-Age / t)
     modelFun = @(b, Age) b(1) + b(2) * exp(-Age / b(3));
 
     % Set initial guesses for parameters A, B, and C
@@ -298,6 +299,8 @@ for t = 1:length(tractIDs)
     inflecTable.MultFastRateX(t) = fr.x(1); 
     inflecTable.MultFastRateY(t) = fr.y(1); 
 
+    %}
+    
     %============== Bootstrapping for ANOVA ==============
     hold on 
 
@@ -305,98 +308,59 @@ for t = 1:length(tractIDs)
 
     N = 100; 
 
-    for q = 1:10000
+    for q = 1:1000
 
-        %Select random sample of N
+        % Select random sample of N
 
-        %define Age, Sex, and measurement variable
+        % Define age and diffusion metric
         x = tbl.Age; 
         y = tbl.yVar;
-        z = tbl.Sex; 
 
-        %randomly select x, y, and z values of size N
+        % Randomly select x and y values of size N
         msize = size(x);
         idx = randperm(msize(1), N);
         x = x(idx(1,:));
         y = y(idx(1,:));
-        z = z(idx(1,:));
 
-        tbl2 = table(x, y, z);
+        tbl2 = table(x, y, 'VariableNames', {'Age', 'yVar'});
 
-        %generating the model
-        Q2 = 'y ~ x^2 + z'; 
-        mdl2 = fitlm(tbl2, Q2);
+        % Define the new model function: C + A * exp(-Age / t)
+        modelFun = @(b, Age) b(1) + b(2) * exp(-Age / b(3));
 
-        %plotting the model
-        h2 = plotAdjustedResponse(mdl2, 'x', 'visible', 'off');  
-        set(h2, 'DefaultFigureVisible', 'off');
+        % Set initial guesses for parameters A, B, and C
+        initialGuess = [0.5, 1, 10];  % Adjust these based on data
 
-        %get data for plotting the confidence intervals and add CI to plot.
-        j2 = array2table(cat(2, h2(1).XData', h2(1).YData')); j2.Properties.VariableNames =  {'x', 'y'};
-        mdlci2 = fitlm(j2, 'y~x^2');
+        %Fit the nonlinear model to the data
+        mdl2 = fitnlm(tbl, modelFun, initialGuess);
+        
+        %======= Calculating the Asymptote =======
+        
+        % Extract the estimated parameters from mdl
+        C = mdl2.Coefficients.Estimate(1); % Asymptote value
 
-        %Find the inflection points
-        %ydt = detrend(y,1); 
-        % Detrend 'y' To Facilitate Analysis
-      
-
-        %plot(x, y, '-*'); hold on;
-
-        %======= Calculating Inflection & Fastest Rate of Change =======
-        x = unique(mdlci2.Variables.x); 
-        y = predict(mdlci2, x);
-
-        % Detrend 'y' To Facilitate Analysis
-        y = detrend(y,1);                                     
-
-        %Store x and y values in ratetbl
-        ratetbl = table(x, y);
-        %remove duplicate points
-        ratetbl = unique(ratetbl, 'rows');
-     
-        %Assign x and y variables to new x and y vectors without duplicate
-        %points
-        y = ratetbl.y; 
-        x = ratetbl.x;
+        % Calculate the predicted values (y)
+        x = linspace(min(tbl2.Age), max(tbl2.Age), 1000); 
+        x_table = table(x', 'VariableNames', {'Age'});
+        y_pred = predict(mdl2, x_table); % Get predicted values using the fitted model
     
-        % Calculate Numerical Derivative
-        dydx = gradient(y) ./ gradient(x);
-        dyydx  = gradient(dydx) ./ gradient(x);
+        % Extract minimum value from mdl 
+        [minValue, minIndex] = min(y_pred);
+        %minAge = x_table.Age(minIndex);
 
-        %Save unordered derivatives in ratetbl                              
-        ratetbl.dydx = dydx;
-        ratetbl.dyydx = dyydx;
-
-        %Sort derivatives 
-        ratetbl = sortrows(ratetbl, 'dydx');                                      
-        [~, ind] = unique(ratetbl(:,1), 'first');
-        ratetbl = ratetbl(ind, :);
-     
-        [~, ind] = unique(ratetbl(:,"dydx"), 'first');
-        ratetbl = ratetbl(ind, :);
-        dydx = ratetbl.dydx; 
+        % Calculate: asymptote - (0.9 * (asymptote - minimum))
+        asymptote_90 = C - (0.9 * (C - minValue));
     
-        %Interpolation Index Lower Limit
-        [maxdydx, idxmax] = max(dydx);
-        [mindydx, idxmin] = min(dydx);
-        idxrng = idxmin: idxmax; 
-    
-        %inflection_idx = find(diff(sign(diff(y)))) + 1;
-    
-        %Find Inflection Point X-Value
-        inflptx = interp1(dydx(idxrng), ratetbl.x(idxrng), 0, 'linear');           
+        % Find the x-coordinate of the asymptote 
+        % Find the index where the predicted values are closest to asymptote_90
+        [~, intersectIndex] = min(abs(y_pred - asymptote_90));
 
-        %Find Inflection Point Y-Value
-        x = unique(mdlci.Variables.x);
-        y = predict(mdlci, x);
-        inflpty = interp1(x, y, inflptx, 'linear');   
-
-        %plot(inflptx, inflpty, '*'); hold off;
+        % Get the corresponding age (x-coordinate) at this intersection point
+        x_intersect = x(intersectIndex);
 
         anovaBootTable.SampleNum(lastRow) = q; 
         anovaBootTable.TractIDs(lastRow) = tractIDs(t); 
-        anovaBootTable.MultInflecX(lastRow) = inflptx; 
-        anovaBootTable.MultInflecY(lastRow) = inflpty; 
+        anovaBootTable.AsymptoteY(lastRow) = x_intersect; 
+        anovaBootTable.AsymptoteX(lastRow) = asymptote_90; 
         
         tractIDsTemp = string(tractIDs{t});
         if  tractIDsTemp(1) == "l"
@@ -413,10 +377,40 @@ for t = 1:length(tractIDs)
 
     end
     
-    hold off 
-    %} 
+    hold off  
     
          
+end
+
+%============== Perform ANOVA and follow-up t-tests ==============
+% Perform ANOVA on the bootstrap asymptote data
+[p_anova, tbl3, stats] = anova1(anovaBootTable.AsymptoteX, anovaBootTable.TractIDs);
+
+% Verify the contents of tbl and extract relevant rows
+% Only select rows from `tbl` that contain data (skip the header rows)
+data_rows = tbl3(2:end, :); % Skip the first row which is typically the header
+
+% Set significance level
+alpha = 0.05;
+
+% Check if ANOVA is significant
+if p_anova < alpha
+    disp('ANOVA indicates significant differences among tracts. Proceeding with Tukey HSD...');
+
+    % Perform Tukey’s HSD post-hoc test
+    [c, m, h, gnames] = multcompare(stats, 'CType', 'tukey-kramer');
+
+    % Convert results into a readable table
+    tukey_results = table(gnames(c(:,1)), gnames(c(:,2)), c(:,3), c(:,4), c(:,5), c(:,6), ...
+                          'VariableNames', {'Tract1', 'Tract2', 'LowerCI', 'MeanDiff', 'UpperCI', 'pValue'});
+    
+     % Add a 'Significant' column based on the p-value
+    tukey_results.Significant = tukey_results.pValue < alpha;
+    
+    % Save Tukey HSD results to a CSV file
+    writetable(tukey_results, 'TukeyHSD_BootstrapResults.csv');
+else
+    disp('No significant differences found in ANOVA. No need for follow-up tests.');
 end
 
 %============== Export rsqTable as a csv ==============
