@@ -28,7 +28,7 @@ inflecTable = readtable(inflecTable);
 aicTable = readtable(aicTable);
 anovaBootTable.Hemisphere = categorical(anovaBootTable.Hemisphere);
 anovaBootTable.Tract = categorical(anovaBootTable.Tract);
-asymptoteTable = table('Size', [0, 3], 'VariableTypes', {'string', 'double', 'double'}, 'VariableNames', {'tractName', 'asymptote', 'x-intersect'});
+asymptoteTable = table('Size', [0, 3], 'VariableTypes', {'string', 'double', 'double'}, 'VariableNames', {'tractName', 'asymptote', 'xIntersect'});
 
 %For ANOVA table
 lastRow = 1; 
@@ -299,89 +299,112 @@ for t = 1:length(tractIDs)
     inflecTable.MultFastRateX(t) = fr.x(1); 
     inflecTable.MultFastRateY(t) = fr.y(1); 
 
-    %}
-    
-    %============== Bootstrapping for ANOVA ==============
-    hold on 
-
-    figure(5*(t + length(tractIDs)))
-
-    N = 100; 
-
-    for q = 1:1000
-
-        % Select random sample of N
-
-        % Define age and diffusion metric
-        x = tbl.Age; 
-        y = tbl.yVar;
-
-        % Randomly select x and y values of size N
-        msize = size(x);
-        idx = randperm(msize(1), N);
-        x = x(idx(1,:));
-        y = y(idx(1,:));
-
-        tbl2 = table(x, y, 'VariableNames', {'Age', 'yVar'});
-
-        % Define the new model function: C + A * exp(-Age / t)
-        modelFun = @(b, Age) b(1) + b(2) * exp(-Age / b(3));
-
-        % Set initial guesses for parameters A, B, and C
-        initialGuess = [0.5, 1, 10];  % Adjust these based on data
-
-        %Fit the nonlinear model to the data
-        mdl2 = fitnlm(tbl, modelFun, initialGuess);
-        
-        %======= Calculating the Asymptote =======
-        
-        % Extract the estimated parameters from mdl
-        C = mdl2.Coefficients.Estimate(1); % Asymptote value
-
-        % Calculate the predicted values (y)
-        x = linspace(min(tbl2.Age), max(tbl2.Age), 1000); 
-        x_table = table(x', 'VariableNames', {'Age'});
-        y_pred = predict(mdl2, x_table); % Get predicted values using the fitted model
-    
-        % Extract minimum value from mdl 
-        [minValue, minIndex] = min(y_pred);
-        %minAge = x_table.Age(minIndex);
-
-        % Calculate: asymptote - (0.9 * (asymptote - minimum))
-        asymptote_90 = C - (0.9 * (C - minValue));
-    
-        % Find the x-coordinate of the asymptote 
-        % Find the index where the predicted values are closest to asymptote_90
-        [~, intersectIndex] = min(abs(y_pred - asymptote_90));
-
-        % Get the corresponding age (x-coordinate) at this intersection point
-        x_intersect = x(intersectIndex);
-
-        anovaBootTable.SampleNum(lastRow) = q; 
-        anovaBootTable.TractIDs(lastRow) = tractIDs(t); 
-        anovaBootTable.AsymptoteY(lastRow) = x_intersect; 
-        anovaBootTable.AsymptoteX(lastRow) = asymptote_90; 
-        
-        tractIDsTemp = string(tractIDs{t});
-        if  tractIDsTemp(1) == "l"
-            anovaBootTable.Hemisphere(lastRow) = 'left';
-            anovaBootTable.Tract(lastRow) = string(extractAfter(tractIDs(t), 4));
-        end
-
-        if  tractIDsTemp(1) == "r"
-            anovaBootTable.Hemisphere(lastRow) = 'right';
-            anovaBootTable.Tract(lastRow) = string(extractAfter(tractIDs(t), 5));
-        end
-
-        lastRow = lastRow + 1; 
-
-    end
-    
-    hold off  
-    
-         
+    %}     
 end
 
+%============== Bootstrapping for ANOVA ==============
+tractIDs = asymptoteTable.tractName;
+observedAsymptotes = asymptoteTable.xIntersect;
+numTracts = length(tractIDs);
+
+% Pool all data points across tracts into a single dataset
+
+% Define the column names to exclude
+excludeColumns = {'subjectID', 'Sex', 'Handedness'}; % Replace with actual column names
+
+% Select all columns except the ones in `excludeColumns`
+pooledData = Tshort(:, ~ismember(Tshort.Properties.VariableNames, excludeColumns));
+
+% Stack all columns except 'Age' into one variable 'FA_Value'
+T_stacked = stack(pooledData, pooledData.Properties.VariableNames(2:end), ...
+                  'NewDataVariableName', 'FA_Value', ...
+                  'IndexVariableName', 'Tract_Name');
+
+% The new table will have columns: 'Age', 'Tract_Name', and 'FA_Value'
+% Reorder columns if desired
+T_stacked = T_stacked(:, {'Age', 'FA_Value', 'Tract_Name'});
+pooledData = table(T_stacked.Age, T_stacked.FA_Value);
+
+%Remove any rows with missing data (NaN or empty character) from tbl 
+pooledData(any(ismissing(pooledData), 2), :) = [];
+
+% Set the size of each sample
+N = 100; 
+
+% Set the number of permutations
+numPermutations = 10;
+
+% Define model function and initial guess for parameters
+modelFun = @(b, Age) b(1) + b(2) * exp(-Age / b(3));
+initialGuess = [0.5, 1, 10]; % Initial guess for model parameters
+
+% Initialize vector to store permuted x_intersect values
+permutedXIntersects = zeros(numPermutations, 1);
+
+% Permutation testing loop
+for i = 1:numPermutations
+    % Randomly sample N points from the pooled data (ignoring tract labels)
+    sampleIndices = randperm(height(pooledData), N);
+    sampleData = pooledData(sampleIndices, :);
+    sampleData.Properties.VariableNames = {'Age', 'FA_Value'}; 
+
+    % Fit the nonlinear model to the sampled data
+    tbl = table(sampleData.Age, sampleData.FA_Value, 'VariableNames', {'Age', 'FA_Value'});
+    
+    if height(tbl) > 1  % Ensure there's enough data to fit the model
+        mdl = fitnlm(tbl, modelFun, initialGuess);
+        C = mdl.Coefficients.Estimate(1); % Asymptote value
+
+        % Calculate predicted values for a range of x (Age) values
+        x = linspace(min(tbl.Age), max(tbl.Age), 1000);
+        x_table = table(x', 'VariableNames', {'Age'});
+        y_pred = predict(mdl, x_table);
+
+        % Find minimum y value and calculate asymptote at 90%
+        [minValue, ~] = min(y_pred);
+        asymptote_90 = C - (0.9 * (C - minValue));
+
+        % Find the x-coordinate where the predicted values are closest to asymptote_90
+        [~, intersectIndex] = min(abs(y_pred - asymptote_90));
+        x_intersect = x(intersectIndex); % x-coordinate of the intersection point
+
+        % Store the x_intersect for this permutation
+        permutedXIntersects(i) = x_intersect;
+    else
+        % If not enough data, set to NaN
+        permutedXIntersects(i) = NaN;
+    end
+end
+
+% Calculate p-values for each tract's observed x_intersect
+pValues = zeros(numTracts, 1);
+significanceLevel = 0.05; % Define the significance level
+significantLabels = strings(numTracts, 1); % Initialize significance labels
+
+for t = 1:numTracts
+    % Remove NaNs from the permuted x_intersects
+    validPermutedXIntersects = permutedXIntersects(~isnan(permutedXIntersects));
+    
+    % Calculate p-value by comparing observed x_intersect to permuted distribution
+    pValues(t) = mean(abs(validPermutedXIntersects) >= abs(observedAsymptotes(t)));
+    
+    % Determine significance based on the p-value
+    if pValues(t) < significanceLevel
+        significantLabels(t) = "Yes";
+    else
+        significantLabels(t) = "No";
+    end
+end
+
+% Append p-values and significance labels to the asymptote table
+asymptoteTable.pValue = pValues;
+asymptoteTable.Significant = significantLabels;
+
+% Display and save results
+disp(asymptoteTable);
+writetable(asymptoteTable, 'PermutationTest_XIntersectResults.csv');
+
+%{
 %============== Perform ANOVA and follow-up t-tests ==============
 % Perform ANOVA on the bootstrap asymptote data
 [p_anova, tbl3, stats] = anova1(anovaBootTable.AsymptoteX, anovaBootTable.TractIDs);
@@ -409,9 +432,11 @@ if p_anova < alpha
     
     % Save Tukey HSD results to a CSV file
     writetable(tukey_results, 'TukeyHSD_BootstrapResults.csv');
+    %writetable(anovaBootTable, 'anovaTableN100q1000.csv');
 else
     disp('No significant differences found in ANOVA. No need for follow-up tests.');
 end
+%}
 
 %============== Export rsqTable as a csv ==============
 %local path to save table: 
