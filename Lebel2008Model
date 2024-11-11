@@ -7,25 +7,28 @@ measure = 'fa';
 %Insert local path of Tshort.csv and Tlong.csv file
 Tshort = '/Volumes/LANDLAB/projects/hbn/projectTrackProfiles/supportFiles/Tshort.csv';
 Tlong = '/Volumes/LANDLAB/projects/hbn/projectTrackProfiles/supportFiles/Tlong.csv';
+Diagnosis = '/Volumes/LANDLAB/projects/hbn/projectTrackProfiles/supportFiles/Diagnosis.csv';
 colorProfiles = '/Volumes/LANDLAB/projects/hbn/projectTrackProfiles/supportFiles/colorProfiles.csv';
 rsqTableAdj = '/Volumes/LANDLAB/projects/hbn/projectTrackProfiles/supportFiles/rsqTableAdj.csv';
 rsqTableOrd = '/Volumes/LANDLAB/projects/hbn/projectTrackProfiles/supportFiles/rsqTableOrd.csv';
 inflecTable = '/Volumes/LANDLAB/projects/hbn/projectTrackProfiles/supportFiles/inflecTable.csv';
-aicTable = '/Volumes/LANDLAB/projects/hbn/projectTrackProfiles/supportFiles/aicTable.csv';
 
 differenceTable = table('Size', [0, 2], 'VariableTypes', {'string', 'double'}, 'VariableNames', {'TractID', 'Difference'});
 anovaBootTable = table('Size', [0, 6], 'VariableTypes', {'double', 'string', 'string', 'string', 'double', 'double'}, ...
     'VariableNames', ...
     {'SampleNum', 'TractIDs', 'Hemisphere', 'Tract', 'AsymptoteY', 'AsymptoteX'});
+% Initialize a table to store the tract name and AIC value for each tract
+aicTable = table('Size', [0, 2], 'VariableTypes', {'string', 'double'}, 'VariableNames', {'TractName', '2008_AIC'});
+
 
 %Convert csv into a table.
 Tshort = readtable(Tshort); 
 Tlong = readtable(Tlong); 
+DiagnosisT = readtable(Diagnosis); 
 colorProfiles = readtable(colorProfiles);
 rsqTableAdj = readtable(rsqTableAdj);
 rsqTableOrd = readtable(rsqTableOrd);
 inflecTable = readtable(inflecTable);
-aicTable = readtable(aicTable);
 anovaBootTable.Hemisphere = categorical(anovaBootTable.Hemisphere);
 anovaBootTable.Tract = categorical(anovaBootTable.Tract);
 asymptoteTable = table('Size', [0, 3], 'VariableTypes', {'string', 'double', 'double'}, 'VariableNames', {'tractName', 'asymptote', 'xIntersect'});
@@ -34,6 +37,19 @@ asymptoteTable = table('Size', [0, 3], 'VariableTypes', {'string', 'double', 'do
 lastRow = 1; 
 
 %============== Generate Plots ==============
+% Filter for subjects with "No Diagnosis" and IDs that start with "N"
+subjectsWithNoDiagnosisN = DiagnosisT.Identifiers(strcmp(DiagnosisT.Diagnosis_ClinicianConsensus_DX_01, 'No Diagnosis Given') ...
+    & startsWith(DiagnosisT.Identifiers, 'N'));
+
+% Get all subjects whose IDs start with "P" in Tshort and Tlong
+subjectsWithP = Tshort.subjectID(startsWith(Tshort.subjectID, 'P'));
+
+% Combine both groups: subjects with "No Diagnosis" and IDs starting with "N", and all "P" subjects
+validSubjects = [subjectsWithNoDiagnosisN; subjectsWithP];
+
+% Filter Tshort and Tlong to include only the valid subjects
+Tshort = Tshort(ismember(Tshort.subjectID, validSubjects), :);
+Tlong = Tlong(ismember(Tlong.subjectID, validSubjects), :);
 
 %Generate column of tracts of interest ids
 mask = ismember(Tlong.structureID, colorProfiles{:, 1});
@@ -134,34 +150,20 @@ for t = 1:length(tractIDs)
     %================= Calculating Asymptote ===================
     % Extract the estimated parameters from mdl
     C = mdl.Coefficients.Estimate(1); % Asymptote value
+    A = mdl.Coefficients.Estimate(2);
+    T = mdl.Coefficients.Estimate(3);
 
-    % Calculate the predicted values (y)
-    x = linspace(min(tbl.Age), max(tbl.Age), 1000); 
-    x_table = table(x', 'VariableNames', {'Age'});
-    y_pred = predict(mdl, x_table); % Get predicted values using the fitted model
-    
-    % Extract minimum value from mdl 
-    [minValue, minIndex] = min(y_pred);
-    %minAge = x_table.Age(minIndex);
+    % Define the target FA value to reach 90% of maximum development
+    target_FA = 0.9 * C;
 
-    % Calculate: asymptote - (0.9 * (asymptote - minimum))
-    asymptote_90 = C - (0.9 * (C - minValue));
-
-    % Plot asymptote
-    yline(asymptote_90, '--r', 'LineWidth', 2.5, 'LabelHorizontalAlignment', 'left');
-    
-    % Find the x-coordinate of the asymptote 
-    % Find the index where the predicted values are closest to asymptote_90
-    [~, intersectIndex] = min(abs(y_pred - asymptote_90));
-
-    % Get the corresponding age (x-coordinate) at this intersection point
-    x_intersect = x(intersectIndex);
+    % Solve for age to reach target_FA
+    age_90_percent = -T * log((-0.1 * C) / A);
 
     % Plot this intersection point on the graph
-    plot(x_intersect, asymptote_90, 'ro', 'MarkerSize', 8, 'DisplayName', 'Asymptote_90 Intersection');
+    plot(age_90_percent, target_FA, 'ro', 'MarkerSize', 10, 'MarkerFaceColor', 'r');
     
     % Add the tract name and asymptote to the table
-    newRow = {char(tractIDs(t)), C, x_intersect};
+    newRow = {char(tractIDs(t)), target_FA, age_90_percent};
     asymptoteTable = [asymptoteTable; newRow];
     
     %======= Calculating Inflection & Fastest Rate of Change =======
@@ -267,17 +269,12 @@ for t = 1:length(tractIDs)
     set(gcf, 'color', 'w')
     
     %===========================================================================
-    %Add adjusted R-squared & AIC values to table.
-    %rsqTableAdj.MultNonLin(t) = mdlci.Rsquared.Adjusted;
-    %rsqTableOrd.MultNonLin(t) = mdlci.Rsquared.Ordinary;
-    %aicTable.MultNonLin(t)= mdlci.ModelCriterion.AIC;
+    % Extract the AIC value for the fitted model
+    aicValue = mdl.ModelCriterion.AIC;
 
-    %legend
-    %lgd = legend(f, {"Inflection Point","Fastest Rate of Change"});
-    %lgd.FontName = 'Arial';
-    %lgd.FontSize = 18;
-    %legend box off;
-    %pbaspect([1 1 1]);
+    % Store the tract name and AIC value in the aicTable
+    newRow = {char(tractIDs(t)), aicValue};
+    aicTable = [aicTable; newRow];
     
     %=========================================================================================
      %{
@@ -353,23 +350,19 @@ for i = 1:numPermutations
     
     if height(tbl) > 1  % Ensure there's enough data to fit the model
         mdl = fitnlm(tbl, modelFun, initialGuess);
+        % Extract the estimated parameters from mdl
         C = mdl.Coefficients.Estimate(1); % Asymptote value
+        A = mdl.Coefficients.Estimate(2);
+        T = mdl.Coefficients.Estimate(3);
 
-        % Calculate predicted values for a range of x (Age) values
-        x = linspace(min(tbl.Age), max(tbl.Age), 1000);
-        x_table = table(x', 'VariableNames', {'Age'});
-        y_pred = predict(mdl, x_table);
+        % Define the target FA value to reach 90% of maximum development
+        target_FA = 0.9 * C;
 
-        % Find minimum y value and calculate asymptote at 90%
-        [minValue, ~] = min(y_pred);
-        asymptote_90 = C - (0.9 * (C - minValue));
-
-        % Find the x-coordinate where the predicted values are closest to asymptote_90
-        [~, intersectIndex] = min(abs(y_pred - asymptote_90));
-        x_intersect = x(intersectIndex); % x-coordinate of the intersection point
-
+        % Solve for age to reach target_FA
+        age_90_percent = -T * log((-0.1 * C) / A);
+        
         % Store the x_intersect for this permutation
-        permutedXIntersects(i) = x_intersect;
+        permutedXIntersects(i) = age_90_percent;
     else
         % If not enough data, set to NaN
         permutedXIntersects(i) = NaN;
