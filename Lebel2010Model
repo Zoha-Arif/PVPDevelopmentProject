@@ -15,7 +15,6 @@ inflecTable = '/Volumes/LANDLAB/projects/hbn/projectTrackProfiles/supportFiles/i
 anovaBootTable = '/Volumes/LANDLAB/projects/hbn/projectTrackProfiles/supportFiles/anovaBootTable.csv';
 
 differenceTable = table('Size', [0, 2], 'VariableTypes', {'string', 'double'}, 'VariableNames', {'TractID', 'Difference'});
-
 % Initialize a table to store the tract name and AIC value for each tract
 aicTable = table('Size', [0, 2], 'VariableTypes', {'string', 'double'}, 'VariableNames', {'TractName', '2010_AIC'});
 
@@ -30,7 +29,6 @@ inflecTable = readtable(inflecTable);
 anovaBootTable = readtable(anovaBootTable); 
 anovaBootTable.Hemisphere = categorical(anovaBootTable.Hemisphere);
 anovaBootTable.Tract = categorical(anovaBootTable.Tract);
-asymptoteTable = table('Size', [0, 3], 'VariableTypes', {'string', 'double', 'double'}, 'VariableNames', {'tractName', 'asymptote', 'xIntersect'});
 
 %For ANOVA table
 lastRow = 1; 
@@ -146,27 +144,8 @@ for t = 1:length(tractIDs)
     xlabel('Age');
     ylabel('yVar');
     
-    %================= Calculating Asymptote ===================
-    % Extract the estimated parameters from mdl
-    C = mdl.Coefficients.Estimate(1); % Asymptote value
-    A = mdl.Coefficients.Estimate(2);
-    T = mdl.Coefficients.Estimate(3);
-
-    % Define the target FA value to reach 90% of maximum development
-    target_FA = 0.9 * C;
-
-    % Solve for age to reach target_FA
-    age_90_percent = -T * log((-0.1 * C) / A);
-
-    % Plot this intersection point on the graph
-    plot(age_90_percent, target_FA, 'ro', 'MarkerSize', 10, 'MarkerFaceColor', 'r');
-    
-    % Add the tract name and asymptote to the table
-    newRow = {char(tractIDs(t)), target_FA, age_90_percent};
-    asymptoteTable = [asymptoteTable; newRow];
-    
     %======= Calculating Inflection & Fastest Rate of Change =======
-    %{
+    
     % Define a high-resolution age range for interpolation
     x = linspace(min(tbl.Age), max(tbl.Age), 1000); 
 
@@ -215,9 +194,9 @@ for t = 1:length(tractIDs)
 
     %Plot the inflection points
     scatter(inflection_points_x, inflection_points_y, 100, 'red', 'filled');
-    %}
-    hold off
     
+    hold off
+
     %===========================================================================
     %Style Settings for the Plot
 
@@ -274,6 +253,14 @@ for t = 1:length(tractIDs)
     newRow = {char(tractIDs(t)), aicValue};
     aicTable = [aicTable; newRow];
 
+    %===========================================================================
+    % Extract the AIC value for the fitted model
+    aicValue = mdl.ModelCriterion.AIC;
+
+    % Store the tract name and AIC value in the aicTable
+    newRow = {char(tractIDs(t)), aicValue};
+    aicTable = [aicTable; newRow];
+    
     %===========================================================================
     %{
     %Curvature Analysis
