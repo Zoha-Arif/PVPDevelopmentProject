@@ -19,7 +19,9 @@ anovaBootTable = table('Size', [0, 6], 'VariableTypes', {'double', 'string', 'st
     {'SampleNum', 'TractIDs', 'Hemisphere', 'Tract', 'AsymptoteY', 'AsymptoteX'});
 % Initialize a table to store the tract name and AIC value for each tract
 aicTable = table('Size', [0, 2], 'VariableTypes', {'string', 'double'}, 'VariableNames', {'TractName', '2008_AIC'});
-
+outputTable = table('Size', [0, 6], 'VariableTypes', {'string', 'double', 'double', 'double'...
+    , 'double', 'double'}, 'VariableNames', {'TractName', 'yRange', ...
+    'minValue', 'maxValue', 'yat90', 'x_intercept_yat90'});
 
 %Convert csv into a table.
 Tshort = readtable(Tshort); 
@@ -147,24 +149,42 @@ for t = 1:length(tractIDs)
     xlabel('Age');
     ylabel('yVar');
     
-    %================= Calculating Asymptote ===================
+    %================= Calculating Min-Max Metric ===================
     % Extract the estimated parameters from mdl
-    C = mdl.Coefficients.Estimate(1); % Asymptote value
-    A = mdl.Coefficients.Estimate(2);
-    T = mdl.Coefficients.Estimate(3);
+    %C = mdl.Coefficients.Estimate(1); % Asymptote value
+    %A = mdl.Coefficients.Estimate(2);
+    %T = mdl.Coefficients.Estimate(3);
 
-    % Define the target FA value to reach 90% of maximum development
-    target_FA = 0.9 * C;
-
-    % Solve for age to reach target_FA
-    age_90_percent = -T * log((-0.1 * C) / A);
-
-    % Plot this intersection point on the graph
-    plot(age_90_percent, target_FA, 'ro', 'MarkerSize', 10, 'MarkerFaceColor', 'r');
+    % Calculate the predicted values (y)
+    x = linspace(min(tbl.Age), max(tbl.Age), 1000); 
+    x_table = table(x', 'VariableNames', {'Age'});
+    y_pred = predict(mdl, x_table); % Get predicted values using the fitted model
     
-    % Add the tract name and asymptote to the table
-    newRow = {char(tractIDs(t)), target_FA, age_90_percent};
-    asymptoteTable = [asymptoteTable; newRow];
+    % Extract minimum value from mdl 
+    [minValue, minIndex] = min(y_pred);
+    
+    % Extract minimum value from mdl 
+    [maxValue, maxIndex] = max(y_pred);
+    
+    % Calculate yRange 
+    yRange = maxValue - minValue; 
+    
+    % Calculate yat90
+    yat90 = 0.90*(yRange) + minValue; 
+    
+    % Find the x-intercept of yat90
+    % This is the x-value (or Age) where y_pred is closest to yat90
+    [~, intersectIndex] = min(abs(y_pred - yat90));
+    x_intercept_yat90 = x(intersectIndex);
+    
+    % Plot this intersection point on the graph
+    plot(x_intercept_yat90, yat90, 'ro', 'MarkerSize', 10, 'MarkerFaceColor', 'r');
+    
+    % Add to output table
+    newRow = {char(tractIDs(t)), yRange, minValue, maxValue, yat90, x_intercept_yat90};
+
+    % Store values in outputTable
+    outputTable = [outputTable; newRow];
     
     %======= Calculating Inflection & Fastest Rate of Change =======
     %{
@@ -275,7 +295,6 @@ for t = 1:length(tractIDs)
     % Store the tract name and AIC value in the aicTable
     newRow = {char(tractIDs(t)), aicValue};
     aicTable = [aicTable; newRow];
-    
     %=========================================================================================
      %{
     % Calculate the difference between the first and last points of mdlci
@@ -300,8 +319,7 @@ for t = 1:length(tractIDs)
 end
 
 %============== Bootstrapping for ANOVA ==============
-tractIDs = asymptoteTable.tractName;
-observedAsymptotes = asymptoteTable.xIntersect;
+observedXint = outputTable.x_intercept_yat90;
 numTracts = length(tractIDs);
 
 % Pool all data points across tracts into a single dataset
@@ -309,7 +327,7 @@ numTracts = length(tractIDs);
 % Define the column names to exclude
 excludeColumns = {'subjectID', 'Sex', 'Handedness'}; % Replace with actual column names
 
-% Select all columns except the ones in `excludeColumns`
+% Select all columns except the ones in excludeColumns
 pooledData = Tshort(:, ~ismember(Tshort.Properties.VariableNames, excludeColumns));
 
 % Stack all columns except 'Age' into one variable 'FA_Value'
@@ -329,7 +347,7 @@ pooledData(any(ismissing(pooledData), 2), :) = [];
 N = 100; 
 
 % Set the number of permutations
-numPermutations = 10;
+numPermutations = 100000;
 
 % Define model function and initial guess for parameters
 modelFun = @(b, Age) b(1) + b(2) * exp(-Age / b(3));
@@ -349,20 +367,30 @@ for i = 1:numPermutations
     tbl = table(sampleData.Age, sampleData.FA_Value, 'VariableNames', {'Age', 'FA_Value'});
     
     if height(tbl) > 1  % Ensure there's enough data to fit the model
-        mdl = fitnlm(tbl, modelFun, initialGuess);
-        % Extract the estimated parameters from mdl
-        C = mdl.Coefficients.Estimate(1); % Asymptote value
-        A = mdl.Coefficients.Estimate(2);
-        T = mdl.Coefficients.Estimate(3);
-
-        % Define the target FA value to reach 90% of maximum development
-        target_FA = 0.9 * C;
-
-        % Solve for age to reach target_FA
-        age_90_percent = -T * log((-0.1 * C) / A);
+        % Calculate the predicted values (y)
+        x = linspace(min(tbl.Age), max(tbl.Age), 1000); 
+        x_table = table(x', 'VariableNames', {'Age'});
+        y_pred = predict(mdl, x_table); % Get predicted values using the fitted model
+    
+        % Extract minimum value from mdl 
+        [minValue, minIndex] = min(y_pred);
+    
+        % Extract minimum value from mdl 
+        [maxValue, maxIndex] = max(y_pred);
+    
+        % Calculate yRange 
+        yRange = maxValue - minValue; 
+    
+        % Calculate yat90
+        yat90 = 0.90*(yRange) + minValue; 
+    
+        % Find the x-intercept of yat90
+        % This is the x-value (or Age) where y_pred is closest to yat90
+        [~, intersectIndex] = min(abs(y_pred - yat90));
+        x_intercept_yat90 = x(intersectIndex);
         
         % Store the x_intersect for this permutation
-        permutedXIntersects(i) = age_90_percent;
+        permutedXIntersects(i) = x_intercept_yat90;
     else
         % If not enough data, set to NaN
         permutedXIntersects(i) = NaN;
@@ -379,7 +407,8 @@ for t = 1:numTracts
     validPermutedXIntersects = permutedXIntersects(~isnan(permutedXIntersects));
     
     % Calculate p-value by comparing observed x_intersect to permuted distribution
-    pValues(t) = mean(abs(validPermutedXIntersects) >= abs(observedAsymptotes(t)));
+    pValues(t) = mean(abs(validPermutedXIntersects - mean(validPermutedXIntersects)) >= abs(observedXint(t) - ...
+        mean(validPermutedXIntersects)));
     
     % Determine significance based on the p-value
     if pValues(t) < significanceLevel
@@ -389,13 +418,38 @@ for t = 1:numTracts
     end
 end
 
-% Append p-values and significance labels to the asymptote table
-asymptoteTable.pValue = pValues;
-asymptoteTable.Significant = significantLabels;
+% Append p-values and significance labels to the output table
+outputTable.pValue = pValues;
+outputTable.Significant = significantLabels;
+
+% Plot the histogram of permuted x-intersects
+figure;
+histogram(validPermutedXIntersects, 30, 'FaceColor', [0.7, 0.7, 0.7], 'EdgeColor', 'k');
+hold on;
+
+% Loop over each tract to overlay observed x-intersect with label
+for t = 1:numTracts
+    % Plot a vertical line for the observed x-intersect
+    xline(observedXint(t), 'LineWidth', 2, 'Color', 'r');
+    
+    % Add text label for the tract name near the vertical line
+    % Adjust `x` and `y` positioning if needed
+    text(observedXint(t) + 0.1, max(ylim) * 0.95, tractIDs{t}, ...
+         'Color', 'r', 'FontSize', 10, 'HorizontalAlignment', 'left', ...
+         'Rotation', 90);
+end
+
+% Customize plot
+xlabel('X-Intercept at 90% Y Level');
+ylabel('Frequency');
+title('Distribution of Permuted X-Intercepts with Observed Values');
+legend('Permuted X-Intercepts', 'Observed X-Intercepts');
+hold off;
+
 
 % Display and save results
-disp(asymptoteTable);
-writetable(asymptoteTable, 'PermutationTest_XIntersectResults.csv');
+disp(outputTable);
+writetable(outputTable, 'PermutationTest_XIntersectResults.csv');
 
 %{
 %============== Perform ANOVA and follow-up t-tests ==============
@@ -413,7 +467,7 @@ alpha = 0.05;
 if p_anova < alpha
     disp('ANOVA indicates significant differences among tracts. Proceeding with Tukey HSD...');
 
-    % Perform Tukey’s HSD post-hoc test
+    % Perform Tukey?s HSD post-hoc test
     [c, m, h, gnames] = multcompare(stats, 'CType', 'tukey-kramer');
 
     % Convert results into a readable table
