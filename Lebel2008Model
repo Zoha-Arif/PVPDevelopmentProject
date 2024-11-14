@@ -368,7 +368,7 @@ permutedXIntersects = zeros(numPermutations, 1);
 
 % Permutation testing loop
 for i = 1:numPermutations
-    % Randomly sample N points from the pooled data with replacement (ignoring tract labels)
+    % Randomly sample N points from the pooled data with replacement
     sampleIndices = randsample(height(pooledData), N, true);
     sampleData = pooledData(sampleIndices, :);
     sampleData.Properties.VariableNames = {'Age', 'FA_Value'}; 
