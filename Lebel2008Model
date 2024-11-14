@@ -324,20 +324,30 @@ numTracts = length(tractIDs);
 
 % Pool all data points across tracts into a single dataset
 
-% Define the column names to exclude
-excludeColumns = {'subjectID', 'Sex', 'Handedness'}; % Replace with actual column names
+% Define the tracts of interest
+tractsOfInterest = {'leftMDLFang', 'leftMDLFspl', 'leftTPC', 'leftpArc', 'leftVOF'...
+    'rightMDLFang', 'rightMDLFspl', 'rightTPC', 'rightpArc', 'rightVOF', 'Age'};
 
-% Select all columns except the ones in excludeColumns
-pooledData = Tshort(:, ~ismember(Tshort.Properties.VariableNames, excludeColumns));
+% Define the columns to exclude
+excludeColumns = {'subjectID', 'Sex', 'Handedness'}; 
 
-% Stack all columns except 'Age' into one variable 'FA_Value'
+% Get a list of all columns in the table
+allColumns = Tshort.Properties.VariableNames;
+
+% Select only the columns for the tracts of interest, excluding unwanted columns
+selectedColumns = setdiff(intersect(allColumns, tractsOfInterest), excludeColumns);
+
+% Filter the table to include only the selected columns
+pooledData = Tshort(:, selectedColumns);
+
+% Stack the PVP and VOF columns into a single variable
 T_stacked = stack(pooledData, pooledData.Properties.VariableNames(2:end), ...
                   'NewDataVariableName', 'FA_Value', ...
                   'IndexVariableName', 'Tract_Name');
 
 % The new table will have columns: 'Age', 'Tract_Name', and 'FA_Value'
-% Reorder columns if desired
 T_stacked = T_stacked(:, {'Age', 'FA_Value', 'Tract_Name'});
+
 pooledData = table(T_stacked.Age, T_stacked.FA_Value);
 
 %Remove any rows with missing data (NaN or empty character) from tbl 
@@ -347,7 +357,7 @@ pooledData(any(ismissing(pooledData), 2), :) = [];
 N = 100; 
 
 % Set the number of permutations
-numPermutations = 100000;
+numPermutations = 10000;
 
 % Define model function and initial guess for parameters
 modelFun = @(b, Age) b(1) + b(2) * exp(-Age / b(3));
@@ -358,8 +368,8 @@ permutedXIntersects = zeros(numPermutations, 1);
 
 % Permutation testing loop
 for i = 1:numPermutations
-    % Randomly sample N points from the pooled data (ignoring tract labels)
-    sampleIndices = randperm(height(pooledData), N);
+    % Randomly sample N points from the pooled data with replacement (ignoring tract labels)
+    sampleIndices = randsample(height(pooledData), N, true);
     sampleData = pooledData(sampleIndices, :);
     sampleData.Properties.VariableNames = {'Age', 'FA_Value'}; 
 
@@ -446,44 +456,27 @@ title('Distribution of Permuted X-Intercepts with Observed Values');
 legend('Permuted X-Intercepts', 'Observed X-Intercepts');
 hold off;
 
-
 % Display and save results
 disp(outputTable);
 writetable(outputTable, 'PermutationTest_XIntersectResults.csv');
 
-%{
-%============== Perform ANOVA and follow-up t-tests ==============
-% Perform ANOVA on the bootstrap asymptote data
-[p_anova, tbl3, stats] = anova1(anovaBootTable.AsymptoteX, anovaBootTable.TractIDs);
+% Calculate the range of the permutation distribution
+minValue = min(validPermutedXIntersects);
+maxValue = max(validPermutedXIntersects);
+distributionRange = maxValue - minValue;
 
-% Verify the contents of tbl and extract relevant rows
-% Only select rows from `tbl` that contain data (skip the header rows)
-data_rows = tbl3(2:end, :); % Skip the first row which is typically the header
+% Display the range
+disp(['Range of the permutation distribution: ', num2str(distributionRange)]);
+disp(['Minimum value: ', num2str(minValue)]);
+disp(['Maximum value: ', num2str(maxValue)]);
 
-% Set significance level
-alpha = 0.05;
+% Calculate the mean and standard deviation of the permutation distribution
+distributionMean = mean(validPermutedXIntersects);
+distributionStd = std(validPermutedXIntersects);
 
-% Check if ANOVA is significant
-if p_anova < alpha
-    disp('ANOVA indicates significant differences among tracts. Proceeding with Tukey HSD...');
-
-    % Perform Tukey?s HSD post-hoc test
-    [c, m, h, gnames] = multcompare(stats, 'CType', 'tukey-kramer');
-
-    % Convert results into a readable table
-    tukey_results = table(gnames(c(:,1)), gnames(c(:,2)), c(:,3), c(:,4), c(:,5), c(:,6), ...
-                          'VariableNames', {'Tract1', 'Tract2', 'LowerCI', 'MeanDiff', 'UpperCI', 'pValue'});
-    
-     % Add a 'Significant' column based on the p-value
-    tukey_results.Significant = tukey_results.pValue < alpha;
-    
-    % Save Tukey HSD results to a CSV file
-    writetable(tukey_results, 'TukeyHSD_BootstrapResults.csv');
-    %writetable(anovaBootTable, 'anovaTableN100q1000.csv');
-else
-    disp('No significant differences found in ANOVA. No need for follow-up tests.');
-end
-%}
+% Display the results
+disp(['Mean of the permutation distribution: ', num2str(distributionMean)]);
+disp(['Standard deviation of the permutation distribution: ', num2str(distributionStd)]);
 
 %============== Export rsqTable as a csv ==============
 %local path to save table: 
