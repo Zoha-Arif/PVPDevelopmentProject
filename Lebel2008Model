@@ -318,7 +318,7 @@ for t = 1:length(tractIDs)
     %}     
 end
 
-%============== Bootstrapping for ANOVA ==============
+%============== Parametric Bootstrapping (Omnibus Anova) ==============
 observedXint = outputTable.x_intercept_yat90;
 numTracts = length(tractIDs);
 
@@ -354,7 +354,7 @@ pooledData = table(T_stacked.Age, T_stacked.FA_Value);
 pooledData(any(ismissing(pooledData), 2), :) = [];
 
 % Set the size of each sample
-N = 100; 
+N = 400; 
 
 % Set the number of permutations
 numPermutations = 10000;
@@ -499,6 +499,58 @@ distributionStd = std(validPermutedXIntersects);
 % Display the results
 disp(['Mean of the permutation distribution: ', num2str(distributionMean)]);
 disp(['Standard deviation of the permutation distribution: ', num2str(distributionStd)]);
+
+%============== Follow-up T-Tests (2 Tracts / Time) ==============
+% Define unique tract names
+tractNames = unique(outputTable.TractName);
+
+% Initialize variables to store t-test results
+numPairs = nchoosek(length(tractNames), 2); % Number of pairs
+tractPairNames = strings(numPairs, 1);
+pValues = zeros(numPairs, 1);
+testStatistics = zeros(numPairs, 1);
+significanceLabels = strings(numPairs, 1); 
+
+% Pair counter
+pairIdx = 1;
+
+% Loop through all pairs of tracts
+for i = 1:length(tractNames) - 1
+    for j = i + 1:length(tractNames)
+        % Get tract names
+        tract1 = tractNames(i);
+        tract2 = tractNames(j);
+        
+        % Extract FA values for each tract
+        values1 = T_stacked.FA_Value(T_stacked.Tract_Name == tract1);
+        values2 = T_stacked.FA_Value(T_stacked.Tract_Name == tract2);
+        
+        % Perform a two-sample t-test
+        [~, p, ~, stats] = ttest2(values1, values2);
+        
+        % Determine significance and store label
+        if p < significanceLevel
+            significanceLabels(pairIdx) = "Yes";
+        else
+            significanceLabels(pairIdx) = "No";
+        end
+        
+        % Store the results
+        tractPairNames(pairIdx) = tract1 + " vs " + tract2;
+        pValues(pairIdx) = p;
+        testStatistics(pairIdx) = stats.tstat;
+        
+        % Increment pair counter
+        pairIdx = pairIdx + 1;
+    end
+end
+
+% Create a table for the t-test results with significance labels
+tTestResults = table(tractPairNames, pValues, testStatistics, significanceLabels, ...
+                     'VariableNames', {'Tract_Pair', 'pValue', 'TStatistic', 'Significant'});
+
+% Display the t-test results
+disp(tTestResults);
 
 %============== Export rsqTable as a csv ==============
 %local path to save table: 
