@@ -428,33 +428,55 @@ for t = 1:numTracts
     end
 end
 
-% Append p-values and significance labels to the output table
+% Calculate the mean and standard deviation of the permuted x-intersects
+meanPermutedXIntersect = mean(validPermutedXIntersects);
+stdPermutedXIntersect = std(validPermutedXIntersects);
+
+% Calculate z-scores for each observed x-intercept
+zScores = (observedXint - meanPermutedXIntersect) / stdPermutedXIntersect;
+
+% Append z-scores to the output table
+outputTable.zScore = zScores;
+
+% Append p-values label to the output table
 outputTable.pValue = pValues;
+
+% Add a new column to outputTable that is pValue divided by 10
+outputTable.pValue_div10 = outputTable.pValue / 10;
+
+% Append significance label to the output table
 outputTable.Significant = significantLabels;
+
+% Filter outputTable to include only rows with tract names in tractsOfInterest
+outputTable = outputTable(ismember(outputTable.TractName, tractsOfInterest), :);
 
 % Plot the histogram of permuted x-intersects
 figure;
 histogram(validPermutedXIntersects, 30, 'FaceColor', [0.7, 0.7, 0.7], 'EdgeColor', 'k');
 hold on;
 
-% Loop over each tract to overlay observed x-intersect with label
+% Loop over each tract to overlay observed x-intersect with label only if it is in tractsOfInterest
 for t = 1:numTracts
-    % Plot a vertical line for the observed x-intersect
-    xline(observedXint(t), 'LineWidth', 2, 'Color', 'r');
-    
-    % Add text label for the tract name near the vertical line
-    % Adjust `x` and `y` positioning if needed
-    text(observedXint(t) + 0.1, max(ylim) * 0.95, tractIDs{t}, ...
-         'Color', 'r', 'FontSize', 10, 'HorizontalAlignment', 'left', ...
-         'Rotation', 90);
+    if ismember(tractIDs{t}, tractsOfInterest)
+        % Plot a vertical line for the observed x-intersect
+        xline(observedXint(t), 'LineWidth', 2, 'Color', 'r');
+        
+        % Add text label for the tract name near the vertical line
+        text(observedXint(t) + 0.1, max(ylim) * 0.95, tractIDs{t}, ...
+             'Color', 'r', 'FontSize', 10, 'HorizontalAlignment', 'left', ...
+             'Rotation', 90);
+    end
 end
-
 % Customize plot
 xlabel('X-Intercept at 90% Y Level');
 ylabel('Frequency');
 title('Distribution of Permuted X-Intercepts with Observed Values');
 legend('Permuted X-Intercepts', 'Observed X-Intercepts');
 hold off;
+
+% Rank order the z-scores in descending order (highest z-score gets rank 1)
+[~, zScoreRank] = sort(outputTable.zScore, 'descend');
+outputTable = sortrows(outputTable, 'zScore', 'descend');
 
 % Display and save results
 disp(outputTable);
