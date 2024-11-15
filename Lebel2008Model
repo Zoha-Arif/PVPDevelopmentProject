@@ -500,7 +500,8 @@ distributionStd = std(validPermutedXIntersects);
 disp(['Mean of the permutation distribution: ', num2str(distributionMean)]);
 disp(['Standard deviation of the permutation distribution: ', num2str(distributionStd)]);
 
-%============== Follow-up T-Tests (2 Tracts / Time) ==============
+%================== Follow-up T-Tests (2 Tracts / Time) ===================
+
 % Define unique tract names
 tractNames = unique(outputTable.TractName);
 
@@ -545,9 +546,15 @@ for i = 1:length(tractNames) - 1
     end
 end
 
+% Add a new column to outputTable that is pValue divided by 10
+pValue_div = pValues / length(pValues);
+
 % Create a table for the t-test results with significance labels
-tTestResults = table(tractPairNames, pValues, testStatistics, significanceLabels, ...
-                     'VariableNames', {'Tract_Pair', 'pValue', 'TStatistic', 'Significant'});
+tTestResults = table(tractPairNames, pValues, pValue_div, testStatistics, significanceLabels, ...
+                     'VariableNames', {'Tract_Pair', 'pValue', 'pValue_div', 'TStatistic', 'Significant'});
+
+% Sort tTestResults by TStatistic in descending order
+tTestResults = sortrows(tTestResults, 'TStatistic', 'ascend');
 
 % Display the t-test results
 disp(tTestResults);
