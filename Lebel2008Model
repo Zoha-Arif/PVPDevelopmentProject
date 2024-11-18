@@ -546,14 +546,15 @@ for i = 1:length(tractNames) - 1
     end
 end
 
-% Add a new column to outputTable that is pValue divided by 10
+% Add a new column to tTestResults that is pValue divided by the number of
+% permutations
 pValue_div = pValues / length(pValues);
 
 % Create a table for the t-test results with significance labels
 tTestResults = table(tractPairNames, pValues, pValue_div, testStatistics, significanceLabels, ...
                      'VariableNames', {'Tract_Pair', 'pValue', 'pValue_div', 'TStatistic', 'Significant'});
 
-% Sort tTestResults by TStatistic in descending order
+% Sort tTestResults by TStatistic in ascending order
 tTestResults = sortrows(tTestResults, 'TStatistic', 'ascend');
 
 % Display the t-test results
