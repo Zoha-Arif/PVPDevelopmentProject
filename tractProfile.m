@@ -7,18 +7,47 @@ clear all; clc; clf;
 measure = 'fa';
 numNodes = 200 - 20; 
 
-%insert local path of Tlong.csv file
+%insert local path of Tlong.csv file 
+Tshort = '/Volumes/LANDLAB/projects/hbn/projectTrackProfiles/supportFiles/Tshort.csv';
 Tlong = '/Volumes/LANDLAB/projects/hbn/projectTrackProfiles/supportFiles/Tlong.csv';
 colorProfiles = '/Volumes/LANDLAB/projects/hbn/projectTrackProfiles/supportFiles/colorProfiles.csv';
+Diagnosis = '/Volumes/LANDLAB/projects/hbn/projectTrackProfiles/supportFiles/Diagnosis.csv';
+ASDdiagnosis = '/Volumes/LANDLAB/projects/hbn/projectTrackProfiles/supportFiles/ASDSubjects.csv';
+Motordiagnosis = '/Volumes/LANDLAB/projects/hbn/projectTrackProfiles/supportFiles/MotorSubjects.csv';
 
 %convert csv into a table.
+Tshort = readtable(Tshort);
 Tlong = readtable(Tlong); 
 colorProfiles = readtable(colorProfiles);
+DiagnosisT = readtable(Diagnosis); 
+ASDT = readtable(ASDdiagnosis);
+MotorDiagnosisT = readtable(Motordiagnosis); 
 
 %close all previous plots
 close all
 
 %============== Generate Plots ==============
+%Filter for subjects with ASD 
+subjectsWithASD = ASDT.Identifiers(strcmp(ASDT.ASD, 'Yes') ...
+    & startsWith(ASDT.Identifiers, 'N'));
+
+%Filter for subjects with Motor Disorders
+subjectsWithMotor = MotorDiagnosisT.Identifiers(strcmp(MotorDiagnosisT.Motor, 'Yes') ...
+    & startsWith(MotorDiagnosisT.Identifiers, 'N'));
+
+% Filter for subjects with "No Diagnosis" and IDs that start with "N"
+subjectsWithNoDiagnosisN = DiagnosisT.Identifiers(strcmp(DiagnosisT.Diagnosis_ClinicianConsensus_DX_01, 'No Diagnosis Given') ...
+    & startsWith(DiagnosisT.Identifiers, 'N'));
+
+% Get all subjects whose IDs start with "P" in Tshort and Tlong
+subjectsWithP = Tshort.subjectID(startsWith(Tshort.subjectID, 'P'));
+
+% Combine both groups: subjects with "No Diagnosis" and IDs starting with "N", and all "P" subjects
+validSubjects = [subjectsWithNoDiagnosisN; subjectsWithP]; %No Diagonosis 
+%validSubjects = [subjectsWithASD]; %ASD
+%validSubjects = [subjectsWithMotor]; %MotorDisorder
+
+Tlong = Tlong(ismember(Tlong.subjectID, validSubjects), :);
 
 %generate column of tracts of interest ids
 mask = ismember(Tlong.structureID, colorProfiles{:, 1});
@@ -135,7 +164,7 @@ for z = 1:length(tractIDs)
     f = figure(z);
 
     %startingx, startingy, width height
-    f.Position = [1000 1000 900 700];
+    f.Position = [1000 1000 1300 800];
 
     hold on
 
@@ -162,7 +191,7 @@ for z = 1:length(tractIDs)
     plotTitle = strjoin(['Tract Profiles for', plotTitle]);
     title(plotTitle);
     xlabel('Location along tract');
-    ylabel('Fractional anistropy');
+    ylabel('fa');
 
     %===========================================================================
     %getting shaded confidence intervals for 56
@@ -261,15 +290,24 @@ for z = 1:length(tractIDs)
     plot(mean1314Tbl.X, mean1314Tbl.Y, 'LineWidth', 3, 'color', [(markerColor(1)*0.50)  (markerColor(2)*0.50) (markerColor(3)*0.50)]);
 
     %Create legend
-    %legend
-    %lines = [a, b, c, d, e];
+    legendLabels = {'3-8 Years', '8-12 Years', '12-16 Years', '16-20 Years', '20-22 Years'};
+    legendColors = [
+        markerColor * 0.90;
+        markerColor * 0.80;
+        markerColor * 0.70;
+        markerColor * 0.60;
+        markerColor * 0.50
+    ];
 
-    %lgd = legend(lines, ["3-8 Years", "8-12 Years", "12-16 Years", "16-20 Years", ...
-    %    "20-22 Years"]);
-    %lgd.FontName = 'Arial';
-    %lgd.FontSize = 16;
-    %legend box off;
-    %pbaspect([1 1 1]);
+    % Create the legend with color boxes
+    legendHandles = gobjects(length(legendLabels), 1);
+    for i = 1:length(legendLabels)
+        legendHandles(i) = patch(NaN, NaN, legendColors(i, :), 'EdgeColor', 'none');
+    end
+
+    lgd = legend(legendHandles, legendLabels, 'FontSize', 16, 'Location', 'eastoutside');
+    lgd.Title.String = 'Age Groups';
+    lgd.Box = 'off';
 
     %===========================================================================
     % Set up plot and measure-specific details.
@@ -353,6 +391,15 @@ for z = 1:length(tractIDs)
     idxMean2(1) = idxMean2(1) + 322; 
     idxMean2(322) = idxMean2(322) + 322; 
     idxMean2 = idxMean2(1):idxMean2(322); 
+    
+    %===========================================================================
+    % Define the custom path and filename
+    customPath = '/Volumes/LANDLAB/projects/hbn/projectTrackProfiles/tractProfiles'; % Replace with your desired folder path
+    fileName = [plotTitle, '.png']; % Specify the file name
+    fullFilePath = fullfile(customPath, fileName); % Combine path and file name
+    
+    % Save as a png image
+    saveas(f, fullFilePath);
 
 end
 
@@ -361,9 +408,9 @@ end
 %Right Hemisphere Plots
 f = figure(length(tractIDs) + 1);
 
-%Startingx, Startingy, Width x Height
-f.Position = [1000 1000 900 700];
-
+%startingx, startingy, width height
+f.Position = [1000 1000 1300 800];
+    
 hold on
 
 %===========================================================================
@@ -371,7 +418,7 @@ plotTitle = {'Right Hemisphere Tracts'};
 plotTitle = strjoin(['Tract Profiles for ', plotTitle]);
 title(plotTitle);
 xlabel('Location along tract');
-ylabel('Fractional anistropy');
+ylabel('fa');
 %===========================================================================
 
 coordpArc = find(strcmp(mean7777Tbl.tract, 'rightpArc') == 1);
@@ -402,19 +449,22 @@ plotTPC = find(strcmp(mean6666Tbl.tract, 'rightTPC') == 1);
 plotTPCX = mean6666Tbl.X(plotTPC);
 plotTPCY = mean6666Tbl.Y(plotTPC);
 
+coordVOF = find(strcmp(mean7777Tbl.tract, 'rightVOF') == 1);
+coordVOFX = mean7777Tbl.coord_comb1(coordVOF);
+coordVOFY = mean7777Tbl.coord_comb2(coordVOF);
+plotVOF = find(strcmp(mean6666Tbl.tract, 'rightVOF') == 1);
+plotVOFX = mean6666Tbl.X(plotVOF);
+plotVOFY = mean6666Tbl.Y(plotVOF);
+
+legendColors = []; 
+
 idxColor = find(strcmp(colorProfiles.NameOfTrack, 'rightpArc') == 1);
 markerColor = [str2double(colorProfiles.Red{idxColor})/255, ...
                str2double(colorProfiles.Green{idxColor})/255, ...
                str2double(colorProfiles.Blue{idxColor})/255];
 fill(coordpArcX, coordpArcY, [markerColor(1)*0.75  markerColor(2)*0.75 markerColor(3)*0.75], 'LineStyle', 'none', 'facealpha', '0.3')
 plot(plotpArcX, plotpArcY, 'LineWidth', 3, 'color',  [markerColor(1)*0.90  markerColor(2)*0.90 markerColor(3)*0.90]);
-
-idxColor = find(strcmp(colorProfiles.NameOfTrack, 'rightMDLFang') == 1);
-markerColor = [str2double(colorProfiles.Red{idxColor})/255, ...
-               str2double(colorProfiles.Green{idxColor})/255, ...
-               str2double(colorProfiles.Blue{idxColor})/255];
-fill(coordFangX, coordFangY, [markerColor(1)*0.75  markerColor(2)*0.75 markerColor(3)*0.75], 'LineStyle', 'none', 'facealpha', '0.3')
-plot(plotFangX, plotFangY, 'LineWidth', 3, 'color',  [markerColor(1)*0.90  markerColor(2)*0.90 markerColor(3)*0.90]);
+legendColors = [legendColors; markerColor];
 
 idxColor = find(strcmp(colorProfiles.NameOfTrack, 'rightMDLFspl') == 1);
 markerColor = [str2double(colorProfiles.Red{idxColor})/255, ...
@@ -422,6 +472,15 @@ markerColor = [str2double(colorProfiles.Red{idxColor})/255, ...
                str2double(colorProfiles.Blue{idxColor})/255];
 fill(coordFsplX, coordFsplY, [markerColor(1)*0.75  markerColor(2)*0.75 markerColor(3)*0.75], 'LineStyle', 'none', 'facealpha', '0.3')
 plot(plotFsplX, plotFsplY, 'LineWidth', 3, 'color',  [markerColor(1)*0.90  markerColor(2)*0.90 markerColor(3)*0.90]);
+legendColors = [legendColors; markerColor];
+
+idxColor = find(strcmp(colorProfiles.NameOfTrack, 'rightMDLFang') == 1);
+markerColor = [str2double(colorProfiles.Red{idxColor})/255, ...
+               str2double(colorProfiles.Green{idxColor})/255, ...
+               str2double(colorProfiles.Blue{idxColor})/255];
+fill(coordFangX, coordFangY, [markerColor(1)*0.75  markerColor(2)*0.75 markerColor(3)*0.75], 'LineStyle', 'none', 'facealpha', '0.3')
+plot(plotFangX, plotFangY, 'LineWidth', 3, 'color',  [markerColor(1)*0.90  markerColor(2)*0.90 markerColor(3)*0.90]);
+legendColors = [legendColors; markerColor];
 
 idxColor = find(strcmp(colorProfiles.NameOfTrack, 'rightTPC') == 1);
 markerColor = [str2double(colorProfiles.Red{idxColor})/255, ...
@@ -429,7 +488,30 @@ markerColor = [str2double(colorProfiles.Red{idxColor})/255, ...
                str2double(colorProfiles.Blue{idxColor})/255];
 fill(coordTPCX, coordTPCY, [markerColor(1)*0.75  markerColor(2)*0.75 markerColor(3)*0.75], 'LineStyle', 'none', 'facealpha', '0.3')
 plot(plotTPCX, plotTPCY, 'LineWidth', 3, 'color',  [markerColor(1)*0.90  markerColor(2)*0.90 markerColor(3)*0.90]);
+legendColors = [legendColors; markerColor];
 
+idxColor = find(strcmp(colorProfiles.NameOfTrack, 'rightVOF') == 1);
+markerColor = [str2double(colorProfiles.Red{idxColor})/255, ...
+               str2double(colorProfiles.Green{idxColor})/255, ...
+               str2double(colorProfiles.Blue{idxColor})/255];
+fill(coordVOFX, coordVOFY, [markerColor(1)*0.75  markerColor(2)*0.75 markerColor(3)*0.75], 'LineStyle', 'none', 'facealpha', '0.3')
+plot(plotVOFX, plotVOFY, 'LineWidth', 3, 'color',  [markerColor(1)*0.90  markerColor(2)*0.90 markerColor(3)*0.90]);
+legendColors = [legendColors; markerColor];
+
+%===========================================================================
+%Create legend
+legendLabels = {'pArc', 'MDLF-spl', 'MDLF-ang', 'TPC', 'VOF'};
+   
+% Create the legend with color boxes
+legendHandles = gobjects(length(legendLabels), 1);
+for i = 1:length(legendLabels)
+    legendHandles(i) = patch(NaN, NaN, legendColors(i, :), 'EdgeColor', 'none');
+end
+
+lgd = legend(legendHandles, legendLabels, 'FontSize', 16, 'Location', 'eastoutside');
+lgd.Title.String = 'Tracts';
+lgd.Box = 'off';
+    
 %===========================================================================
 % Set up plot and measure-specific details.
     
@@ -467,6 +549,14 @@ yax.FontAngle = fontangle;
 set(gcf, 'color', 'w')
 
 %===========================================================================
+% Define the custom path and filename
+customPath = '/Volumes/LANDLAB/projects/hbn/projectTrackProfiles/tractProfiles'; % Replace with your desired folder path
+fileName = [plotTitle, '.png']; % Specify the file name
+fullFilePath = fullfile(customPath, fileName); % Combine path and file name
+    
+% Save as a png image
+saveas(f, fullFilePath);
+
 
 hold off
 
@@ -474,8 +564,8 @@ hold off
 %Left Hemisphere Plots
 f = figure(length(tractIDs) + 2);
 
-%Startingx, Startingy, Width x Height
-f.Position = [1000 1000 900 700];
+%startingx, startingy, width height
+f.Position = [1000 1000 1300 800];
 
 hold on
 
@@ -484,7 +574,7 @@ plotTitle = {'Left Hemisphere Tracts'};
 plotTitle = strjoin(['Tract Profiles for ', plotTitle]);
 title(plotTitle);
 xlabel('Location along tract');
-ylabel('Fractional anistropy');
+ylabel('fa');
 %===========================================================================
 
 coordpArc = find(strcmp(mean7777Tbl.tract, 'leftpArc') == 1);
@@ -515,6 +605,13 @@ plotTPC = find(strcmp(mean6666Tbl.tract, 'leftTPC') == 1);
 plotTPCX = mean6666Tbl.X(plotTPC);
 plotTPCY = mean6666Tbl.Y(plotTPC);
 
+coordVOF = find(strcmp(mean7777Tbl.tract, 'leftVOF') == 1);
+coordVOFX = mean7777Tbl.coord_comb1(coordVOF);
+coordVOFY = mean7777Tbl.coord_comb2(coordVOF);
+plotVOF = find(strcmp(mean6666Tbl.tract, 'leftVOF') == 1);
+plotVOFX = mean6666Tbl.X(plotVOF);
+plotVOFY = mean6666Tbl.Y(plotVOF);
+
 idxColor = find(strcmp(colorProfiles.NameOfTrack, 'leftpArc') == 1);
 markerColor = [str2double(colorProfiles.Red{idxColor})/255, ...
                str2double(colorProfiles.Green{idxColor})/255, ...
@@ -542,6 +639,27 @@ markerColor = [str2double(colorProfiles.Red{idxColor})/255, ...
                str2double(colorProfiles.Blue{idxColor})/255];
 fill(coordTPCX, coordTPCY, [markerColor(1)*0.75  markerColor(2)*0.75 markerColor(3)*0.75], 'LineStyle', 'none', 'facealpha', '0.3')
 plot(plotTPCX, plotTPCY, 'LineWidth', 3, 'color',  [markerColor(1)*0.90  markerColor(2)*0.90 markerColor(3)*0.90]);
+
+idxColor = find(strcmp(colorProfiles.NameOfTrack, 'leftVOF') == 1);
+markerColor = [str2double(colorProfiles.Red{idxColor})/255, ...
+               str2double(colorProfiles.Green{idxColor})/255, ...
+               str2double(colorProfiles.Blue{idxColor})/255];
+fill(coordVOFX, coordVOFY, [markerColor(1)*0.75  markerColor(2)*0.75 markerColor(3)*0.75], 'LineStyle', 'none', 'facealpha', '0.3')
+plot(plotVOFX, plotVOFY, 'LineWidth', 3, 'color',  [markerColor(1)*0.90  markerColor(2)*0.90 markerColor(3)*0.90]);
+
+%===========================================================================
+%Create legend
+legendLabels = {'pArc', 'MDLF-spl', 'MDLF-ang', 'TPC', 'VOF'};
+   
+% Create the legend with color boxes
+legendHandles = gobjects(length(legendLabels), 1);
+for i = 1:length(legendLabels)
+    legendHandles(i) = patch(NaN, NaN, legendColors(i, :), 'EdgeColor', 'none');
+end
+
+lgd = legend(legendHandles, legendLabels, 'FontSize', 16, 'Location', 'eastoutside');
+lgd.Title.String = 'Tracts';
+lgd.Box = 'off';
 
 %===========================================================================
 % Set up plot and measure-specific details.
@@ -580,5 +698,12 @@ yax.FontAngle = fontangle;
 set(gcf, 'color', 'w')
 
 %===========================================================================
+% Define the custom path and filename
+customPath = '/Volumes/LANDLAB/projects/hbn/projectTrackProfiles/tractProfiles'; % Replace with your desired folder path
+fileName = [plotTitle, '.png']; % Specify the file name
+fullFilePath = fullfile(customPath, fileName); % Combine path and file name
+    
+% Save as a png image
+saveas(f, fullFilePath);
 
 hold off
