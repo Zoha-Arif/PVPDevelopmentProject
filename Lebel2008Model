@@ -8,6 +8,8 @@ measure = 'fa';
 Tshort = '/Volumes/LANDLAB/projects/hbn/projectTrackProfiles/supportFiles/Tshort.csv';
 Tlong = '/Volumes/LANDLAB/projects/hbn/projectTrackProfiles/supportFiles/Tlong.csv';
 Diagnosis = '/Volumes/LANDLAB/projects/hbn/projectTrackProfiles/supportFiles/Diagnosis.csv';
+ASDdiagnosis = '/Volumes/LANDLAB/projects/hbn/projectTrackProfiles/supportFiles/ASDSubjects.csv';
+Motordiagnosis = '/Volumes/LANDLAB/projects/hbn/projectTrackProfiles/supportFiles/MotorSubjects.csv';
 colorProfiles = '/Volumes/LANDLAB/projects/hbn/projectTrackProfiles/supportFiles/colorProfiles.csv';
 rsqTableAdj = '/Volumes/LANDLAB/projects/hbn/projectTrackProfiles/supportFiles/rsqTableAdj.csv';
 rsqTableOrd = '/Volumes/LANDLAB/projects/hbn/projectTrackProfiles/supportFiles/rsqTableOrd.csv';
@@ -27,6 +29,8 @@ outputTable = table('Size', [0, 6], 'VariableTypes', {'string', 'double', 'doubl
 Tshort = readtable(Tshort); 
 Tlong = readtable(Tlong); 
 DiagnosisT = readtable(Diagnosis); 
+ASDT = readtable(ASDdiagnosis);
+MotorDiagnosisT = readtable(Motordiagnosis); 
 colorProfiles = readtable(colorProfiles);
 rsqTableAdj = readtable(rsqTableAdj);
 rsqTableOrd = readtable(rsqTableOrd);
@@ -35,10 +39,22 @@ anovaBootTable.Hemisphere = categorical(anovaBootTable.Hemisphere);
 anovaBootTable.Tract = categorical(anovaBootTable.Tract);
 asymptoteTable = table('Size', [0, 3], 'VariableTypes', {'string', 'double', 'double'}, 'VariableNames', {'tractName', 'asymptote', 'xIntersect'});
 
+summaryTable = table('Size', [0, 5], ...
+    'VariableTypes', {'string', 'double', 'double', 'double', 'double'}, ...
+    'VariableNames', {'TractName', 'N', 'AdjustedR2', 'FStatistic', 'timeConstant'});
+
 %For ANOVA table
 lastRow = 1; 
 
 %============== Generate Plots ==============
+%Filter for subjects with ASD 
+subjectsWithASD = ASDT.Identifiers(strcmp(ASDT.ASD, 'Yes') ...
+    & startsWith(ASDT.Identifiers, 'N'));
+
+%Filter for subjects with Motor Disorders
+subjectsWithMotor = MotorDiagnosisT.Identifiers(strcmp(MotorDiagnosisT.Motor, 'Yes') ...
+    & startsWith(MotorDiagnosisT.Identifiers, 'N'));
+
 % Filter for subjects with "No Diagnosis" and IDs that start with "N"
 subjectsWithNoDiagnosisN = DiagnosisT.Identifiers(strcmp(DiagnosisT.Diagnosis_ClinicianConsensus_DX_01, 'No Diagnosis Given') ...
     & startsWith(DiagnosisT.Identifiers, 'N'));
@@ -47,7 +63,9 @@ subjectsWithNoDiagnosisN = DiagnosisT.Identifiers(strcmp(DiagnosisT.Diagnosis_Cl
 subjectsWithP = Tshort.subjectID(startsWith(Tshort.subjectID, 'P'));
 
 % Combine both groups: subjects with "No Diagnosis" and IDs starting with "N", and all "P" subjects
-validSubjects = [subjectsWithNoDiagnosisN; subjectsWithP];
+validSubjects = [subjectsWithNoDiagnosisN; subjectsWithP]; %No Diagonosis 
+%validSubjects = [subjectsWithASD]; %ASD
+%validSubjects = [subjectsWithMotor]; %MotorDisorder
 
 % Filter Tshort and Tlong to include only the valid subjects
 Tshort = Tshort(ismember(Tshort.subjectID, validSubjects), :);
@@ -149,6 +167,29 @@ for t = 1:length(tractIDs)
     xlabel('Age');
     ylabel('yVar');
     
+    %================= Adding to Summary Table ===================
+    % Number of subjects (N)
+    N = height(tbl); 
+
+    % Adjusted R-squared
+    adjustedR2 = mdl.Rsquared.Adjusted;
+
+    % Extract values from the model
+    SSR = mdl.SSR; % Sum of Squares for Regression
+    SSE = mdl.SSE; % Sum of Squares for Error
+    n = mdl.NumObservations; % Total number of observations
+    p = numel(mdl.Coefficients.Estimate); % Number of estimated parameters
+
+    % Compute F-statistic
+    FStatistic = (SSR / p) / (SSE / (n - p));
+    
+    % Extract the time constant (b(3))
+    timeConstant = mdl.Coefficients.Estimate(3);
+
+    % Add these to the summary table
+    newRow = {char(tractIDs(t)), N, adjustedR2, FStatistic, timeConstant};
+    summaryTable = [summaryTable; newRow];
+    
     %================= Calculating Min-Max Metric ===================
     % Extract the estimated parameters from mdl
     %C = mdl.Coefficients.Estimate(1); % Asymptote value
@@ -178,7 +219,7 @@ for t = 1:length(tractIDs)
     x_intercept_yat90 = x(intersectIndex);
     
     % Plot this intersection point on the graph
-    plot(x_intercept_yat90, yat90, 'ro', 'MarkerSize', 10, 'MarkerFaceColor', 'r');
+    plot(x_intercept_yat90, yat90, 'ro', 'MarkerSize', 25, 'MarkerFaceColor', 'r');
     
     % Add to output table
     newRow = {char(tractIDs(t)), yRange, minValue, maxValue, yat90, x_intercept_yat90};
@@ -263,7 +304,7 @@ for t = 1:length(tractIDs)
     xtickvalues = [1 2 3 4];
     xlim_lo = min(xtickvalues)-0.5; xlim_hi = max(xtickvalues)+0.5;
     fontname = 'Arial';
-    fontsize = 50;
+    fontsize = 30;
     fontangle = 'italic';
     yticklength = 0;
     xticklength = 0.02;
@@ -295,6 +336,15 @@ for t = 1:length(tractIDs)
     % Store the tract name and AIC value in the aicTable
     newRow = {char(tractIDs(t)), aicValue};
     aicTable = [aicTable; newRow];
+    %=========================================================================================
+    % Define the custom path and filename
+    customPath = '/Volumes/LANDLAB/projects/hbn/projectTrackProfiles/finalPlots'; % Replace with your desired folder path
+    fileName = [char(tractIDs(t)), '.png']; % Specify the file name
+    fullFilePath = fullfile(customPath, fileName); % Combine path and file name
+    
+    % Save as a png image
+    saveas(gcf, fullFilePath);
+    
     %=========================================================================================
      %{
     % Calculate the difference between the first and last points of mdlci
@@ -559,6 +609,11 @@ tTestResults = sortrows(tTestResults, 'TStatistic', 'ascend');
 
 % Display the t-test results
 disp(tTestResults);
+
+%============== Summary Table ==============
+
+% Display the summary table
+disp(summaryTable);
 
 %============== Export rsqTable as a csv ==============
 %local path to save table: 
