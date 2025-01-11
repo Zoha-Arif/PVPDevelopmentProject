@@ -46,6 +46,12 @@ summaryTable = table('Size', [0, 5], ...
 %For ANOVA table
 lastRow = 1; 
 
+% Filter Tshort and Tlong to include only rows within the specified age range
+ageMin = 0; % Minimum age
+ageMax = 25; % Maximum age
+Tshort = Tshort(Tshort.Age >= ageMin & Tshort.Age <= ageMax, :);
+Tlong = Tlong(Tlong.Age >= ageMin & Tlong.Age <= ageMax, :);
+
 %============== Generate Plots ==============
 %Filter for subjects with ASD 
 subjectsWithASD = ASDT.Identifiers(strcmp(ASDT.ASD, 'Yes') ...
@@ -104,10 +110,33 @@ for t = 1:length(tractIDs)
 
     %Assign Age, Sex, and yVar to new tbl columns with removed row that had missing values
     Age = tbl.Age; 
-    Sex = tbl.Sex; 
+    Sex = categorical(tbl.Sex); 
     yVar = tbl.yVar; 
     
     tbl = table(Age, yVar);
+    
+    %======================================================================
+    % Checking the effect of sex
+    
+    tblSex = table(Age, Sex, yVar); 
+    
+    % Fit a linear model to include Age and Sex as predictors
+    lm_sex = fitlm(tblSex, 'yVar ~ Age + Sex');
+
+    % Display the model summary
+    disp(lm_sex);
+
+    % Extract beta coefficient for Sex
+    beta_sex = lm_sex.Coefficients.Estimate(strcmp(lm_sex.Coefficients.Row, 'Sex_1'));
+    
+    % Adjust FA values by removing the effect of Sex
+    yVar_adjusted = tbl.yVar - (double(tblSex.Sex) * beta_sex);
+
+    % Add the adjusted FA column to the table
+    tbl.yVar = yVar_adjusted;
+
+    % Verify the adjusted FA values
+    disp(head(Tshort)); % Display the first few rows to confirm
 
     %======================================================================
     % Outliers Identification 
@@ -610,10 +639,80 @@ tTestResults = sortrows(tTestResults, 'TStatistic', 'ascend');
 % Display the t-test results
 disp(tTestResults);
 
-%============== Summary Table ==============
+%========================= Summary Table =========================
 
 % Display the summary table
 disp(summaryTable);
+
+%================== Hemispheric Differences T-Tests ===================
+% Initialize table to store results
+tractComparison = table('Size', [0, 5], ...
+    'VariableTypes', {'string', 'double', 'double', 'double', 'double'}, ...
+    'VariableNames', {'TractName', 'MeanDifference', 'StandardDeviation', 'tStatistic', 'pValue'});
+
+% Extract unique tract suffixes (e.g., MDLFang, MDLFspl, TPC)
+uniqueSuffixes = unique(erase(tractIDs, ["left", "right"]));
+
+% Loop through each suffix to compute paired t-test
+for t = 1:length(uniqueSuffixes)
+    % Get suffix (e.g., "MDLFang")
+    tractSuffix = uniqueSuffixes{t};
+
+    % Generate left and right tract names
+    leftTractName = strcat("left", tractSuffix);
+    rightTractName = strcat("right", tractSuffix);
+
+    % Extract x-intercepts for left and right tracts
+    leftXIntercept = outputTable.x_intercept_yat90(strcmp(outputTable.TractName, leftTractName));
+    rightXIntercept = outputTable.x_intercept_yat90(strcmp(outputTable.TractName, rightTractName));
+
+    % Ensure paired comparison by removing missing values
+    validIndices = ~isnan(leftXIntercept) & ~isnan(rightXIntercept);
+    leftXIntercept = leftXIntercept(validIndices);
+    rightXIntercept = rightXIntercept(validIndices);
+
+    % Check if data is valid for comparison
+    if isempty(leftXIntercept) || isempty(rightXIntercept)
+        disp(['Skipping comparison for ', tractSuffix, ' due to missing data.']);
+        continue;
+    end
+
+    % Calculate differences
+    differences = leftXIntercept - rightXIntercept;
+
+    % Check for zero variance (identical values)
+    if all(differences == differences(1))
+        disp(['All differences for ', tractSuffix, ' are identical. No variability.']);
+        meanDifference = differences(1); % Mean of identical values
+        sdDifference = 0;                % Standard deviation is zero
+        tStatistic = NaN;                % t-statistic is undefined
+        pValue = NaN;                    % p-value is undefined
+    else
+        % Compute mean and standard deviation
+        meanDifference = mean(differences);
+        sdDifference = std(differences);
+
+        % Compute sample size
+        n = length(differences);
+
+        % Compute standard error
+        seDifference = sdDifference / sqrt(n);
+
+        % Compute t-statistic
+        tStatistic = meanDifference / seDifference;
+
+        % Compute p-value (two-tailed test)
+        pValue = 2 * (1 - tcdf(abs(tStatistic), n - 1));
+    end
+
+    % Add results to the table
+    newRow = {tractSuffix, meanDifference, sdDifference, tStatistic, pValue};
+    tractComparison = [tractComparison; newRow];
+end
+
+% Display results
+disp('Per-Tract Paired t-Test Results:');
+disp(tractComparison);
 
 %============== Export rsqTable as a csv ==============
 %local path to save table: 
