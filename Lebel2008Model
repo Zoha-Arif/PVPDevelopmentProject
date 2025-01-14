@@ -136,7 +136,7 @@ for t = 1:length(tractIDs)
     tbl.yVar = yVar_adjusted;
 
     % Verify the adjusted FA values
-    disp(head(Tshort)); % Display the first few rows to confirm
+    %disp(head(Tshort)); % Display the first few rows to confirm
 
     %======================================================================
     % Outliers Identification 
@@ -662,9 +662,9 @@ for t = 1:length(uniqueSuffixes)
     leftTractName = strcat("left", tractSuffix);
     rightTractName = strcat("right", tractSuffix);
 
-    % Extract x-intercepts for left and right tracts
-    leftXIntercept = outputTable.x_intercept_yat90(strcmp(outputTable.TractName, leftTractName));
-    rightXIntercept = outputTable.x_intercept_yat90(strcmp(outputTable.TractName, rightTractName));
+    % Extract diffusion metrics for left and right tracts
+    leftXIntercept = Tshort.(char(leftTractName));
+    rightXIntercept = Tshort.(char(rightTractName));
 
     % Ensure paired comparison by removing missing values
     validIndices = ~isnan(leftXIntercept) & ~isnan(rightXIntercept);
